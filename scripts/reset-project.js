@@ -47,6 +47,8 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
+//comentario legal
+
 const moveDirectories = async (userInput) => {
   try {
     if (userInput === "y") {
