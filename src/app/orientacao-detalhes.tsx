@@ -1,4 +1,16 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import {
+    router,
+    useFocusEffect,
+    useLocalSearchParams,
+} from 'expo-router';
+
+import {
+    useCallback,
+    useState,
+} from 'react';
+
 import {
     Pressable,
     ScrollView,
@@ -6,6 +18,7 @@ import {
     Text,
     View,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type OrientacaoDetalhada = {
@@ -13,208 +26,12 @@ type OrientacaoDetalhada = {
     titulo: string;
     categoria: string;
     icone: string;
-    introducao: string;
-    dicas: string[];
-    lembrete: string;
+    introducao?: string;
+    dicas?: string[];
+    lembrete?: string;
 };
 
-const orientacoes: OrientacaoDetalhada[] = [
-    {
-        id: '1',
-        titulo: 'Como agir em uma crise sensorial',
-        categoria: 'Crise Sensorial',
-        icone: '🧩',
-        introducao:
-            'Momentos de sobrecarga sensorial podem acontecer quando a criança recebe mais estímulos do que consegue processar naquele momento.',
-        dicas: [
-            'Procure reduzir estímulos como barulho, luz intensa e movimentação ao redor.',
-            'Mantenha uma postura calma e evite exigir respostas imediatas.',
-            'Se possível, ofereça um ambiente mais tranquilo e conhecido.',
-            'Observe quais estratégias costumam ajudar a criança a se reorganizar.',
-        ],
-        lembrete:
-            'Cada criança é única. Observe suas necessidades e respeite seu tempo.',
-    },
-    {
-        id: '2',
-        titulo: 'Identificando sinais de sobrecarga',
-        categoria: 'Crise Sensorial',
-        icone: '💙',
-        introducao:
-            'Reconhecer sinais de desconforto pode ajudar o responsável a agir antes que a situação se torne mais difícil.',
-        dicas: [
-            'Observe mudanças repentinas no comportamento.',
-            'Perceba se determinados sons, luzes, cheiros ou ambientes causam desconforto.',
-            'Registre situações recorrentes para identificar possíveis padrões.',
-            'Considere as formas individuais que a criança utiliza para demonstrar desconforto.',
-        ],
-        lembrete:
-            'Os sinais podem variar bastante de uma criança para outra.',
-    },
-    {
-        id: '3',
-        titulo: 'Criando um ambiente mais tranquilo',
-        categoria: 'Crise Sensorial',
-        icone: '☁️',
-        introducao:
-            'Algumas adaptações no ambiente podem contribuir para reduzir estímulos e proporcionar maior conforto.',
-        dicas: [
-            'Evite excesso de estímulos simultâneos quando possível.',
-            'Organize um espaço tranquilo para momentos de descanso.',
-            'Observe a iluminação e os sons presentes no ambiente.',
-            'Mantenha objetos familiares por perto quando eles ajudarem a criança.',
-        ],
-        lembrete:
-            'O objetivo não é eliminar todos os estímulos, mas compreender quais adaptações ajudam.',
-    },
 
-    {
-        id: '4',
-        titulo: 'Incentivando a comunicação',
-        categoria: 'Comunicação',
-        icone: '💬',
-        introducao:
-            'A comunicação pode acontecer de diferentes maneiras. O importante é reconhecer e valorizar as formas que a criança utiliza para se expressar.',
-        dicas: [
-            'Use frases claras e objetivas.',
-            'Dê tempo para que a criança processe a informação.',
-            'Observe gestos, expressões e outras formas de comunicação.',
-            'Valorize as tentativas de comunicação sem pressionar.',
-        ],
-        lembrete:
-            'Comunicação não se limita à fala. Diferentes formas de expressão podem ter significado.',
-    },
-    {
-        id: '5',
-        titulo: 'Comunicação além da fala',
-        categoria: 'Comunicação',
-        icone: '🗨️',
-        introducao:
-            'Gestos, imagens, expressões e recursos de comunicação podem auxiliar a criança a demonstrar necessidades, interesses e sentimentos.',
-        dicas: [
-            'Observe os gestos e expressões utilizados pela criança.',
-            'Utilize recursos visuais quando forem úteis.',
-            'Associe palavras a situações e objetos do cotidiano.',
-            'Respeite a forma de comunicação utilizada pela criança.',
-        ],
-        lembrete:
-            'O apoio à comunicação deve considerar as necessidades individuais.',
-    },
-    {
-        id: '6',
-        titulo: 'Dando tempo para responder',
-        categoria: 'Comunicação',
-        icone: '⏳',
-        introducao:
-            'Algumas crianças podem precisar de mais tempo para compreender uma pergunta ou organizar uma resposta.',
-        dicas: [
-            'Faça uma pergunta de cada vez.',
-            'Espere alguns segundos antes de repetir a pergunta.',
-            'Evite completar imediatamente a resposta pela criança.',
-            'Mantenha instruções simples e claras.',
-        ],
-        lembrete:
-            'Dar tempo para responder também é uma forma de respeitar a comunicação.',
-    },
-
-    {
-        id: '7',
-        titulo: 'Criando uma rotina previsível',
-        categoria: 'Rotinas',
-        icone: '🌈',
-        introducao:
-            'Uma rotina mais previsível pode ajudar a criança a compreender o que acontecerá ao longo do dia.',
-        dicas: [
-            'Organize os principais momentos do dia em uma sequência.',
-            'Avise quando uma atividade estiver próxima de terminar.',
-            'Utilize imagens ou outros recursos visuais quando forem úteis.',
-            'Mantenha alguma flexibilidade para situações inesperadas.',
-        ],
-        lembrete:
-            'A rotina pode oferecer previsibilidade sem precisar ser completamente rígida.',
-    },
-    {
-        id: '8',
-        titulo: 'Preparando para mudanças',
-        categoria: 'Rotinas',
-        icone: '📅',
-        introducao:
-            'Mudanças podem ser mais fáceis de compreender quando são comunicadas com antecedência e de forma clara.',
-        dicas: [
-            'Avise sobre mudanças assim que possível.',
-            'Explique de maneira simples o que será diferente.',
-            'Mostre o que continuará igual.',
-            'Use recursos visuais para representar a mudança quando necessário.',
-        ],
-        lembrete:
-            'Antecipar uma mudança pode ajudar a tornar a situação mais previsível.',
-    },
-    {
-        id: '9',
-        titulo: 'Rotina visual',
-        categoria: 'Rotinas',
-        icone: '🖼️',
-        introducao:
-            'Recursos visuais podem ajudar a representar atividades e facilitar a compreensão da sequência do dia.',
-        dicas: [
-            'Use imagens simples para representar as atividades.',
-            'Organize as imagens na ordem em que as atividades acontecerão.',
-            'Mostre quando uma atividade for concluída.',
-            'Atualize a rotina quando houver alguma mudança.',
-        ],
-        lembrete:
-            'O recurso visual deve ser simples e adequado à compreensão da criança.',
-    },
-
-    {
-        id: '10',
-        titulo: 'Conhecendo os direitos',
-        categoria: 'Direitos',
-        icone: '⚖️',
-        introducao:
-            'Conhecer os direitos relacionados às pessoas com Transtorno do Espectro Autista pode ajudar famílias a buscar informações e serviços adequados.',
-        dicas: [
-            'Procure informações em fontes oficiais e atualizadas.',
-            'Guarde documentos importantes relacionados aos atendimentos.',
-            'Em caso de dúvida, procure o órgão responsável pelo serviço.',
-            'Busque orientação especializada quando a situação exigir.',
-        ],
-        lembrete:
-            'Leis, procedimentos e benefícios podem ter regras específicas. Consulte sempre fontes oficiais.',
-    },
-    {
-        id: '11',
-        titulo: 'Inclusão no ambiente escolar',
-        categoria: 'Direitos',
-        icone: '🎒',
-        introducao:
-            'A inclusão escolar envolve participação, aprendizagem, acessibilidade e respeito às necessidades do estudante.',
-        dicas: [
-            'Mantenha comunicação com a equipe escolar.',
-            'Compartilhe informações relevantes para o acompanhamento da criança.',
-            'Converse sobre estratégias que favoreçam participação e aprendizagem.',
-            'Registre dúvidas e procure informações oficiais quando necessário.',
-        ],
-        lembrete:
-            'As necessidades educacionais devem ser analisadas considerando cada estudante e seu contexto.',
-    },
-    {
-        id: '12',
-        titulo: 'Atendimento prioritário',
-        categoria: 'Direitos',
-        icone: '⭐',
-        introducao:
-            'Existem normas relacionadas ao atendimento prioritário, e conhecer essas informações pode ajudar no acesso aos serviços.',
-        dicas: [
-            'Consulte as regras do local ou serviço utilizado.',
-            'Procure informações em canais oficiais.',
-            'Tenha documentos necessários disponíveis quando forem exigidos.',
-            'Em caso de dúvida, solicite orientação ao responsável pelo atendimento.',
-        ],
-        lembrete:
-            'Os procedimentos podem variar conforme o serviço. Confirme as regras aplicáveis em fontes oficiais.',
-    },
-];
 
 export default function OrientacaoDetalhesScreen() {
     const params = useLocalSearchParams();
@@ -223,10 +40,65 @@ export default function OrientacaoDetalhesScreen() {
         ? params.id[0]
         : params.id;
 
-    const orientacao = orientacoes.find(
-        (item) => item.id === idParametro
+    const [orientacao, setOrientacao] =
+        useState<OrientacaoDetalhada | null>(null);
+
+    const [carregando, setCarregando] =
+        useState(true);
+
+    async function carregarOrientacao() {
+        try {
+            setCarregando(true);
+
+            const dadosSalvos =
+                await AsyncStorage.getItem('orientacoes');
+
+            if (!dadosSalvos) {
+                setOrientacao(null);
+                return;
+            }
+
+            const lista: OrientacaoDetalhada[] =
+                JSON.parse(dadosSalvos);
+
+            const encontrada = lista.find(
+                (item) => item.id === idParametro
+            );
+
+            setOrientacao(encontrada ?? null);
+        } catch (erro) {
+            console.log(
+                'Erro ao carregar orientação:',
+                erro
+            );
+
+            setOrientacao(null);
+        } finally {
+            setCarregando(false);
+        }
+    }
+
+    useFocusEffect(
+        useCallback(() => {
+            carregarOrientacao();
+        }, [idParametro])
     );
 
+    if (carregando) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.erroContainer}>
+                    <Text style={styles.erroEmoji}>
+                        📚
+                    </Text>
+
+                    <Text style={styles.erroTitulo}>
+                        Carregando orientação...
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
     if (!orientacao) {
         return (
             <SafeAreaView style={styles.container}>
@@ -296,7 +168,8 @@ export default function OrientacaoDetalhesScreen() {
                     </Text>
 
                     <Text style={styles.paragrafo}>
-                        {orientacao.introducao}
+                        {orientacao.introducao ||
+                            'Nenhuma introdução cadastrada.'}
                     </Text>
 
                     <View style={styles.divisor} />
@@ -305,7 +178,7 @@ export default function OrientacaoDetalhesScreen() {
                         🌈 O que pode ajudar?
                     </Text>
 
-                    {orientacao.dicas.map((dica, index) => (
+                    {(orientacao.dicas ?? []).map((dica, index) => (
                         <View
                             key={index}
                             style={styles.itemDica}
@@ -333,7 +206,8 @@ export default function OrientacaoDetalhesScreen() {
                             </Text>
 
                             <Text style={styles.textoLembrete}>
-                                {orientacao.lembrete}
+                                {orientacao.lembrete ||
+                                    'Nenhum lembrete cadastrado.'}
                             </Text>
                         </View>
                     </View>

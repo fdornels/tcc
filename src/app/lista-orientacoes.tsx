@@ -1,4 +1,16 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import {
+    router,
+    useFocusEffect,
+    useLocalSearchParams,
+} from 'expo-router';
+
+import {
+    useCallback,
+    useState,
+} from 'react';
+
 import {
     Pressable,
     ScrollView,
@@ -6,126 +18,59 @@ import {
     Text,
     View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SafeAreaView } from 'react-native-safe-area-context';
 type Orientacao = {
     id: string;
     titulo: string;
-    descricao: string;
     categoria: string;
     icone: string;
+    introducao?: string;
+    dicas?: string[];
+    lembrete?: string;
 };
 
-const orientacoes: Orientacao[] = [
-    {
-        id: '1',
-        titulo: 'Como agir em uma crise sensorial',
-        descricao:
-            'Estratégias para acolher a criança durante momentos de sobrecarga sensorial.',
-        categoria: 'Crise Sensorial',
-        icone: '🧩',
-    },
-    {
-        id: '2',
-        titulo: 'Identificando sinais de sobrecarga',
-        descricao:
-            'Conheça alguns sinais que podem indicar desconforto ou sobrecarga sensorial.',
-        categoria: 'Crise Sensorial',
-        icone: '💙',
-    },
-    {
-        id: '3',
-        titulo: 'Criando um ambiente mais tranquilo',
-        descricao:
-            'Veja formas de tornar o ambiente mais confortável e previsível.',
-        categoria: 'Crise Sensorial',
-        icone: '☁️',
-    },
-
-    {
-        id: '4',
-        titulo: 'Incentivando a comunicação',
-        descricao:
-            'Conheça maneiras de apoiar a comunicação respeitando o ritmo da criança.',
-        categoria: 'Comunicação',
-        icone: '💬',
-    },
-    {
-        id: '5',
-        titulo: 'Comunicação além da fala',
-        descricao:
-            'Entenda como gestos, imagens e outras formas de expressão podem ajudar.',
-        categoria: 'Comunicação',
-        icone: '🗨️',
-    },
-    {
-        id: '6',
-        titulo: 'Dando tempo para responder',
-        descricao:
-            'Saiba por que respeitar o tempo de processamento pode facilitar a comunicação.',
-        categoria: 'Comunicação',
-        icone: '⏳',
-    },
-
-    {
-        id: '7',
-        titulo: 'Criando uma rotina previsível',
-        descricao:
-            'Veja como organizar atividades do dia de forma mais clara e previsível.',
-        categoria: 'Rotinas',
-        icone: '🌈',
-    },
-    {
-        id: '8',
-        titulo: 'Preparando para mudanças',
-        descricao:
-            'Estratégias para comunicar mudanças e ajudar na adaptação da rotina.',
-        categoria: 'Rotinas',
-        icone: '📅',
-    },
-    {
-        id: '9',
-        titulo: 'Rotina visual',
-        descricao:
-            'Entenda como recursos visuais podem auxiliar na organização das atividades.',
-        categoria: 'Rotinas',
-        icone: '🖼️',
-    },
-
-    {
-        id: '10',
-        titulo: 'Conhecendo os direitos',
-        descricao:
-            'Informações introdutórias sobre direitos da pessoa com Transtorno do Espectro Autista.',
-        categoria: 'Direitos',
-        icone: '⚖️',
-    },
-    {
-        id: '11',
-        titulo: 'Inclusão no ambiente escolar',
-        descricao:
-            'Conheça aspectos importantes relacionados à inclusão e ao ambiente escolar.',
-        categoria: 'Direitos',
-        icone: '🎒',
-    },
-    {
-        id: '12',
-        titulo: 'Atendimento prioritário',
-        descricao:
-            'Entenda informações gerais relacionadas ao atendimento prioritário.',
-        categoria: 'Direitos',
-        icone: '⭐',
-    },
-];
 
 export default function ListaOrientacoesScreen() {
     const params = useLocalSearchParams();
+
+    const [orientacoes, setOrientacoes] =
+        useState<Orientacao[]>([]);
 
     const categoriaParametro = Array.isArray(params.categoria)
         ? params.categoria[0]
         : params.categoria;
 
     const categoria = categoriaParametro || 'Orientações';
+
+    async function carregarOrientacoes() {
+        try {
+            const dadosSalvos =
+                await AsyncStorage.getItem('orientacoes');
+
+            if (dadosSalvos) {
+                const lista: Orientacao[] =
+                    JSON.parse(dadosSalvos);
+
+                setOrientacoes(lista);
+            } else {
+                setOrientacoes([]);
+            }
+        } catch (erro) {
+            console.log(
+                'Erro ao carregar orientações:',
+                erro
+            );
+
+            setOrientacoes([]);
+        }
+    }
+
+    useFocusEffect(
+        useCallback(() => {
+            carregarOrientacoes();
+        }, [])
+    );
 
     const listaFiltrada = orientacoes.filter(
         (item) => item.categoria === categoria
@@ -236,7 +181,8 @@ export default function ListaOrientacoesScreen() {
                                         style={styles.descricaoCard}
                                         numberOfLines={3}
                                     >
-                                        {item.descricao}
+                                        {item.introducao ||
+                                            'Toque para visualizar esta orientação.'}
                                     </Text>
 
                                     <Text style={styles.lerMais}>

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -19,9 +19,9 @@ type Orientacao = {
     titulo: string;
     categoria: string;
     icone: string;
-    introducao: string;
-    dicas: string[];
-    lembrete: string;
+    introducao?: string;
+    dicas?: string[];
+    lembrete?: string;
 };
 
 const categorias = [
@@ -43,41 +43,142 @@ const categorias = [
     },
 ];
 
-export default function NovaOrientacaoScreen() {
+export default function EditarOrientacaoScreen() {
+    const params = useLocalSearchParams();
+
+    const id =
+        typeof params.id === 'string'
+            ? params.id
+            : '';
+
+    const [carregando, setCarregando] = useState(true);
+
     const [titulo, setTitulo] = useState('');
     const [categoria, setCategoria] = useState('');
     const [introducao, setIntroducao] = useState('');
+
     const [dica1, setDica1] = useState('');
     const [dica2, setDica2] = useState('');
     const [dica3, setDica3] = useState('');
     const [dica4, setDica4] = useState('');
+
     const [lembrete, setLembrete] = useState('');
 
+    useEffect(() => {
+        carregarOrientacao();
+    }, [id]);
+
+    async function carregarOrientacao() {
+        try {
+            if (!id) {
+                Alert.alert(
+                    'Erro',
+                    'Não foi possível identificar a orientação.'
+                );
+
+                router.back();
+                return;
+            }
+
+            const dadosSalvos =
+                await AsyncStorage.getItem('orientacoes');
+
+            if (!dadosSalvos) {
+                Alert.alert(
+                    'Erro',
+                    'Nenhuma orientação foi encontrada.'
+                );
+
+                router.back();
+                return;
+            }
+
+            const lista: Orientacao[] =
+                JSON.parse(dadosSalvos);
+
+            const orientacao = lista.find(
+                (item) => item.id === id
+            );
+
+            if (!orientacao) {
+                Alert.alert(
+                    'Erro',
+                    'A orientação não foi encontrada.'
+                );
+
+                router.back();
+                return;
+            }
+
+            setTitulo(orientacao.titulo ?? '');
+            setCategoria(orientacao.categoria ?? '');
+            setIntroducao(orientacao.introducao ?? '');
+
+            setDica1(orientacao.dicas?.[0] ?? '');
+            setDica2(orientacao.dicas?.[1] ?? '');
+            setDica3(orientacao.dicas?.[2] ?? '');
+            setDica4(orientacao.dicas?.[3] ?? '');
+
+            setLembrete(orientacao.lembrete ?? '');
+        } catch (erro) {
+            console.log(
+                'Erro ao carregar orientação:',
+                erro
+            );
+
+            Alert.alert(
+                'Erro',
+                'Não foi possível carregar a orientação.'
+            );
+        } finally {
+            setCarregando(false);
+        }
+    }
+
     function pegarIconeCategoria() {
-        const categoriaSelecionada = categorias.find(
-            (item) => item.nome === categoria
-        );
+        const categoriaSelecionada =
+            categorias.find(
+                (item) => item.nome === categoria
+            );
 
         return categoriaSelecionada?.icone ?? '📚';
     }
 
-    async function salvarOrientacao() {
-        if (
-            !titulo.trim() ||
-            !categoria ||
-            !introducao.trim() ||
-            !dica1.trim() ||
-            !lembrete.trim()
-        ) {
+    async function salvarAlteracoes() {
+        if (!titulo.trim()) {
             Alert.alert(
-                'Campos obrigatórios',
-                'Preencha o título, a categoria, a introdução, pelo menos uma dica e o lembrete.'
+                'Campo obrigatório',
+                'Digite o título da orientação.'
+            );
+
+            return;
+        }
+
+        if (!categoria) {
+            Alert.alert(
+                'Campo obrigatório',
+                'Selecione uma categoria.'
             );
 
             return;
         }
 
         try {
+            const dadosSalvos =
+                await AsyncStorage.getItem('orientacoes');
+
+            if (!dadosSalvos) {
+                Alert.alert(
+                    'Erro',
+                    'Não foi possível encontrar as orientações.'
+                );
+
+                return;
+            }
+
+            const lista: Orientacao[] =
+                JSON.parse(dadosSalvos);
+
             const dicas = [
                 dica1.trim(),
                 dica2.trim(),
@@ -85,41 +186,30 @@ export default function NovaOrientacaoScreen() {
                 dica4.trim(),
             ].filter((dica) => dica.length > 0);
 
-            const novaOrientacao: Orientacao = {
-                id: Date.now().toString(),
-                titulo: titulo.trim(),
-                categoria,
-                icone: pegarIconeCategoria(),
-                introducao: introducao.trim(),
-                dicas,
-                lembrete: lembrete.trim(),
-            };
+            const novaLista = lista.map((item) => {
+                if (item.id !== id) {
+                    return item;
+                }
 
-            const dadosSalvos =
-                await AsyncStorage.getItem('orientacoes');
-
-            const orientacoesAtuais: Orientacao[] =
-                dadosSalvos ? JSON.parse(dadosSalvos) : [];
-
-            const novaLista = [
-                ...orientacoesAtuais,
-                novaOrientacao,
-            ];
+                return {
+                    ...item,
+                    titulo: titulo.trim(),
+                    categoria,
+                    icone: pegarIconeCategoria(),
+                    introducao: introducao.trim(),
+                    dicas,
+                    lembrete: lembrete.trim(),
+                };
+            });
 
             await AsyncStorage.setItem(
                 'orientacoes',
                 JSON.stringify(novaLista)
             );
-            const teste = await AsyncStorage.getItem('orientacoes');
-
-            console.log('=== TESTE ORIENTAÇÕES ===');
-            console.log(teste);
-            console.log('QUANTIDADE:', novaLista.length);
-
 
             Alert.alert(
-                'Orientação salva! 💙',
-                'O conteúdo foi cadastrado com sucesso.',
+                'Alterações salvas! 💙',
+                'A orientação foi atualizada com sucesso.',
                 [
                     {
                         text: 'OK',
@@ -130,15 +220,31 @@ export default function NovaOrientacaoScreen() {
             );
         } catch (erro) {
             console.log(
-                'Erro ao salvar orientação:',
+                'Erro ao editar orientação:',
                 erro
             );
 
             Alert.alert(
                 'Erro',
-                'Não foi possível salvar a orientação.'
+                'Não foi possível salvar as alterações.'
             );
         }
+    }
+
+    if (carregando) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.carregando}>
+                    <Text style={styles.carregandoEmoji}>
+                        📚
+                    </Text>
+
+                    <Text style={styles.carregandoTexto}>
+                        Carregando orientação...
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
     }
 
     return (
@@ -156,17 +262,20 @@ export default function NovaOrientacaoScreen() {
                     keyboardShouldPersistTaps="handled"
                     contentContainerStyle={styles.conteudo}
                 >
-                    {/* Cabeçalho */}
+                    {/* CABEÇALHO */}
+
                     <View style={styles.cabecalho}>
                         <Pressable
                             style={styles.botaoVoltar}
                             onPress={() => router.back()}
                         >
-                            <Text style={styles.seta}>‹</Text>
+                            <Text style={styles.seta}>
+                                ‹
+                            </Text>
                         </Pressable>
 
                         <Text style={styles.tituloPagina}>
-                            Nova orientação
+                            Editar orientação
                         </Text>
 
                         <Text style={styles.estrela}>
@@ -174,26 +283,28 @@ export default function NovaOrientacaoScreen() {
                         </Text>
                     </View>
 
-                    {/* Introdução */}
+                    {/* APRESENTAÇÃO */}
+
                     <View style={styles.apresentacao}>
                         <View style={styles.iconeApresentacao}>
                             <Text style={styles.emojiApresentacao}>
-                                📚
+                                ✏️
                             </Text>
                         </View>
 
                         <View style={styles.textoApresentacao}>
                             <Text style={styles.tituloApresentacao}>
-                                Cadastrar conteúdo
+                                Editar conteúdo
                             </Text>
 
                             <Text style={styles.subtituloApresentacao}>
-                                Adicione uma nova orientação para os responsáveis.
+                                Altere as informações da orientação.
                             </Text>
                         </View>
                     </View>
 
-                    {/* Formulário */}
+                    {/* FORMULÁRIO */}
+
                     <View style={styles.card}>
                         <Text style={styles.label}>
                             Título da orientação *
@@ -201,7 +312,7 @@ export default function NovaOrientacaoScreen() {
 
                         <TextInput
                             style={styles.input}
-                            placeholder="Ex.: Lidando com mudanças na rotina"
+                            placeholder="Título da orientação"
                             placeholderTextColor="#A1AAAE"
                             value={titulo}
                             onChangeText={setTitulo}
@@ -228,9 +339,7 @@ export default function NovaOrientacaoScreen() {
                                             setCategoria(item.nome)
                                         }
                                     >
-                                        <Text
-                                            style={styles.iconeCategoria}
-                                        >
+                                        <Text style={styles.iconeCategoria}>
                                             {item.icone}
                                         </Text>
 
@@ -249,7 +358,7 @@ export default function NovaOrientacaoScreen() {
                         </View>
 
                         <Text style={styles.label}>
-                            Introdução *
+                            Introdução
                         </Text>
 
                         <TextInput
@@ -257,7 +366,7 @@ export default function NovaOrientacaoScreen() {
                                 styles.input,
                                 styles.inputGrande,
                             ]}
-                            placeholder="Explique brevemente o assunto da orientação..."
+                            placeholder="Introdução da orientação..."
                             placeholderTextColor="#A1AAAE"
                             value={introducao}
                             onChangeText={setIntroducao}
@@ -271,80 +380,36 @@ export default function NovaOrientacaoScreen() {
                             </Text>
 
                             <Text style={styles.textoOpcional}>
-                                pelo menos 1
+                                opcional
                             </Text>
                         </View>
 
-                        <View style={styles.campoDica}>
-                            <View style={styles.numeroDica}>
-                                <Text style={styles.numeroDicaTexto}>
-                                    1
-                                </Text>
-                            </View>
+                        <CampoDica
+                            numero="1"
+                            value={dica1}
+                            onChangeText={setDica1}
+                        />
 
-                            <TextInput
-                                style={styles.inputDica}
-                                placeholder="Primeira dica *"
-                                placeholderTextColor="#A1AAAE"
-                                value={dica1}
-                                onChangeText={setDica1}
-                                multiline
-                            />
-                        </View>
+                        <CampoDica
+                            numero="2"
+                            value={dica2}
+                            onChangeText={setDica2}
+                        />
 
-                        <View style={styles.campoDica}>
-                            <View style={styles.numeroDica}>
-                                <Text style={styles.numeroDicaTexto}>
-                                    2
-                                </Text>
-                            </View>
+                        <CampoDica
+                            numero="3"
+                            value={dica3}
+                            onChangeText={setDica3}
+                        />
 
-                            <TextInput
-                                style={styles.inputDica}
-                                placeholder="Segunda dica"
-                                placeholderTextColor="#A1AAAE"
-                                value={dica2}
-                                onChangeText={setDica2}
-                                multiline
-                            />
-                        </View>
-
-                        <View style={styles.campoDica}>
-                            <View style={styles.numeroDica}>
-                                <Text style={styles.numeroDicaTexto}>
-                                    3
-                                </Text>
-                            </View>
-
-                            <TextInput
-                                style={styles.inputDica}
-                                placeholder="Terceira dica"
-                                placeholderTextColor="#A1AAAE"
-                                value={dica3}
-                                onChangeText={setDica3}
-                                multiline
-                            />
-                        </View>
-
-                        <View style={styles.campoDica}>
-                            <View style={styles.numeroDica}>
-                                <Text style={styles.numeroDicaTexto}>
-                                    4
-                                </Text>
-                            </View>
-
-                            <TextInput
-                                style={styles.inputDica}
-                                placeholder="Quarta dica"
-                                placeholderTextColor="#A1AAAE"
-                                value={dica4}
-                                onChangeText={setDica4}
-                                multiline
-                            />
-                        </View>
+                        <CampoDica
+                            numero="4"
+                            value={dica4}
+                            onChangeText={setDica4}
+                        />
 
                         <Text style={styles.label}>
-                            Lembrete *
+                            Lembrete
                         </Text>
 
                         <TextInput
@@ -352,7 +417,7 @@ export default function NovaOrientacaoScreen() {
                                 styles.input,
                                 styles.inputLembrete,
                             ]}
-                            placeholder="Ex.: Cada criança é única. Respeite seu tempo."
+                            placeholder="Lembrete importante..."
                             placeholderTextColor="#A1AAAE"
                             value={lembrete}
                             onChangeText={setLembrete}
@@ -360,16 +425,12 @@ export default function NovaOrientacaoScreen() {
                             textAlignVertical="top"
                         />
 
-                        <Text style={styles.aviso}>
-                            * Campos obrigatórios
-                        </Text>
-
                         <Pressable
                             style={styles.botaoSalvar}
-                            onPress={salvarOrientacao}
+                            onPress={salvarAlteracoes}
                         >
                             <Text style={styles.textoBotaoSalvar}>
-                                Salvar orientação
+                                Salvar alterações
                             </Text>
                         </Pressable>
                     </View>
@@ -393,6 +454,37 @@ export default function NovaOrientacaoScreen() {
     );
 }
 
+type CampoDicaProps = {
+    numero: string;
+    value: string;
+    onChangeText: (texto: string) => void;
+};
+
+function CampoDica({
+    numero,
+    value,
+    onChangeText,
+}: CampoDicaProps) {
+    return (
+        <View style={styles.campoDica}>
+            <View style={styles.numeroDica}>
+                <Text style={styles.numeroDicaTexto}>
+                    {numero}
+                </Text>
+            </View>
+
+            <TextInput
+                style={styles.inputDica}
+                placeholder={`Dica ${numero}`}
+                placeholderTextColor="#A1AAAE"
+                value={value}
+                onChangeText={onChangeText}
+                multiline
+            />
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -401,6 +493,22 @@ const styles = StyleSheet.create({
 
     flex: {
         flex: 1,
+    },
+
+    carregando: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    carregandoEmoji: {
+        fontSize: 42,
+    },
+
+    carregandoTexto: {
+        color: '#667277',
+        fontSize: 13,
+        marginTop: 10,
     },
 
     conteudo: {
@@ -609,13 +717,6 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         color: '#3E494F',
         fontSize: 12,
-    },
-
-    aviso: {
-        color: '#98A1A5',
-        fontSize: 10,
-        marginTop: -6,
-        marginBottom: 17,
     },
 
     botaoSalvar: {

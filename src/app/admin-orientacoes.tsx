@@ -1,4 +1,6 @@
-import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
     Alert,
     Pressable,
@@ -14,9 +16,12 @@ type Orientacao = {
     titulo: string;
     categoria: string;
     icone: string;
+    introducao?: string;
+    dicas?: string[];
+    lembrete?: string;
 };
 
-const orientacoes: Orientacao[] = [
+const orientacoesIniciais: Orientacao[] = [
     {
         id: '1',
         titulo: 'Como agir em uma crise sensorial',
@@ -92,6 +97,104 @@ const orientacoes: Orientacao[] = [
 ];
 
 export default function AdminOrientacoesScreen() {
+    const [orientacoes, setOrientacoes] = useState<Orientacao[]>([]);
+
+    // Carrega as orientações salvas
+    async function carregarOrientacoes() {
+        try {
+            const dadosSalvos = await AsyncStorage.getItem('orientacoes');
+            const migracaoFeita = await AsyncStorage.getItem(
+                'orientacoes_iniciais_v1'
+            );
+
+            // Já existem orientações salvas
+            if (dadosSalvos !== null) {
+                const listaSalva: Orientacao[] = JSON.parse(dadosSalvos);
+
+                // Faz isso UMA ÚNICA VEZ:
+                // junta as 12 iniciais com as que você já cadastrou
+                if (migracaoFeita !== 'sim') {
+                    const idsSalvos = new Set(
+                        listaSalva.map((item) => item.id)
+                    );
+
+                    const iniciaisQueFaltam = orientacoesIniciais.filter(
+                        (item) => !idsSalvos.has(item.id)
+                    );
+
+                    const listaCompleta = [
+                        ...orientacoesIniciais,
+                        ...listaSalva.filter(
+                            (item) =>
+                                !orientacoesIniciais.some(
+                                    (inicial) => inicial.id === item.id
+                                )
+                        ),
+                    ];
+
+                    await AsyncStorage.setItem(
+                        'orientacoes',
+                        JSON.stringify(listaCompleta)
+                    );
+
+                    await AsyncStorage.setItem(
+                        'orientacoes_iniciais_v1',
+                        'sim'
+                    );
+
+                    setOrientacoes(listaCompleta);
+
+                    console.log(
+                        'Migração concluída. Quantidade:',
+                        listaCompleta.length
+                    );
+
+                    return;
+                }
+
+                // Depois da migração, apenas lê o que está salvo.
+                // Isso permite excluir itens sem eles reaparecerem.
+                setOrientacoes(listaSalva);
+
+                console.log(
+                    'ORIENTAÇÕES CARREGADAS:',
+                    listaSalva.length
+                );
+
+                return;
+            }
+
+            // Caso não exista absolutamente nada salvo
+            await AsyncStorage.setItem(
+                'orientacoes',
+                JSON.stringify(orientacoesIniciais)
+            );
+
+            await AsyncStorage.setItem(
+                'orientacoes_iniciais_v1',
+                'sim'
+            );
+
+            setOrientacoes(orientacoesIniciais);
+        } catch (erro) {
+            console.log(
+                'Erro ao carregar orientações:',
+                erro
+            );
+
+            Alert.alert(
+                'Erro',
+                'Não foi possível carregar as orientações.'
+            );
+        }
+    }
+    // Recarrega sempre que voltar para esta tela
+    useFocusEffect(
+        useCallback(() => {
+            carregarOrientacoes();
+        }, [])
+    );
+
     function abrirOpcoes(item: Orientacao) {
         Alert.alert(
             item.titulo,
@@ -100,14 +203,12 @@ export default function AdminOrientacoesScreen() {
                 {
                     text: 'Editar',
                     onPress: () => {
-                        /*
-                         * Vamos conectar ao formulário de edição
-                         * na próxima etapa.
-                         */
-                        Alert.alert(
-                            'Editar orientação',
-                            'O formulário de edição será criado na próxima etapa.'
-                        );
+                        router.push({
+                            pathname: '/editar-orientacao',
+                            params: {
+                                id: item.id,
+                            },
+                        });
                     },
                 },
                 {
@@ -135,19 +236,37 @@ export default function AdminOrientacoesScreen() {
                 {
                     text: 'Excluir',
                     style: 'destructive',
-                    onPress: () => {
-                        /*
-                         * A exclusão real será ligada ao
-                         * AsyncStorage na próxima etapa.
-                         */
-                        Alert.alert(
-                            'Em breve',
-                            'Vamos conectar a exclusão ao armazenamento.'
-                        );
-                    },
+                    onPress: () => excluirOrientacao(item.id),
                 },
             ]
         );
+    }
+
+    async function excluirOrientacao(id: string) {
+        try {
+            const novaLista = orientacoes.filter(
+                (item) => item.id !== id
+            );
+
+            await AsyncStorage.setItem(
+                'orientacoes',
+                JSON.stringify(novaLista)
+            );
+
+            setOrientacoes(novaLista);
+
+            Alert.alert(
+                'Orientação excluída',
+                'O conteúdo foi removido com sucesso.'
+            );
+        } catch (erro) {
+            console.log('Erro ao excluir orientação:', erro);
+
+            Alert.alert(
+                'Erro',
+                'Não foi possível excluir a orientação.'
+            );
+        }
     }
 
     return (
@@ -156,7 +275,7 @@ export default function AdminOrientacoesScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.conteudo}
             >
-                {/* Cabeçalho */}
+                {/* CABEÇALHO */}
                 <View style={styles.cabecalho}>
                     <Pressable
                         style={styles.botaoVoltar}
@@ -172,7 +291,7 @@ export default function AdminOrientacoesScreen() {
                     <Text style={styles.estrela}>★</Text>
                 </View>
 
-                {/* Introdução */}
+                {/* INTRODUÇÃO */}
                 <View style={styles.introducao}>
                     <View style={styles.iconeIntroducao}>
                         <Text style={styles.emojiIntroducao}>
@@ -192,67 +311,99 @@ export default function AdminOrientacoesScreen() {
                     </View>
                 </View>
 
-                {/* Título da lista */}
+                {/* TÍTULO DA LISTA */}
                 <View style={styles.cabecalhoLista}>
                     <Text style={styles.tituloSecao}>
                         Orientações cadastradas
                     </Text>
 
                     <Text style={styles.quantidade}>
-                        {orientacoes.length} conteúdos
+                        {orientacoes.length}{' '}
+                        {orientacoes.length === 1
+                            ? 'conteúdo'
+                            : 'conteúdos'}
                     </Text>
                 </View>
 
-                {/* Lista */}
-                <View style={styles.lista}>
-                    {orientacoes.map((item) => (
-                        <View
-                            key={item.id}
-                            style={styles.card}
-                        >
-                            <View style={styles.iconeCard}>
-                                <Text style={styles.emojiCard}>
-                                    {item.icone}
-                                </Text>
-                            </View>
+                {/* LISTA */}
+                {orientacoes.length === 0 ? (
+                    <View style={styles.listaVazia}>
+                        <Text style={styles.emojiVazio}>
+                            📚
+                        </Text>
 
-                            <View style={styles.conteudoCard}>
-                                <Text style={styles.categoria}>
-                                    {item.categoria}
-                                </Text>
+                        <Text style={styles.tituloVazio}>
+                            Nenhuma orientação cadastrada
+                        </Text>
 
-                                <Text
-                                    style={styles.tituloCard}
-                                    numberOfLines={2}
-                                >
-                                    {item.titulo}
-                                </Text>
-                            </View>
-
-                            <Pressable
-                                style={styles.botaoOpcoes}
-                                onPress={() => abrirOpcoes(item)}
-                                hitSlop={10}
+                        <Text style={styles.textoVazio}>
+                            Toque no botão + para cadastrar uma orientação.
+                        </Text>
+                    </View>
+                ) : (
+                    <View style={styles.lista}>
+                        {orientacoes.map((item) => (
+                            <View
+                                key={item.id}
+                                style={styles.card}
                             >
-                                <Text style={styles.opcoes}>•••</Text>
-                            </Pressable>
-                        </View>
-                    ))}
-                </View>
+                                <View style={styles.iconeCard}>
+                                    <Text style={styles.emojiCard}>
+                                        {item.icone}
+                                    </Text>
+                                </View>
 
+                                <View style={styles.conteudoCard}>
+                                    <Text style={styles.categoria}>
+                                        {item.categoria}
+                                    </Text>
+
+                                    <Text
+                                        style={styles.tituloCard}
+                                        numberOfLines={2}
+                                    >
+                                        {item.titulo}
+                                    </Text>
+                                </View>
+
+                                <Pressable
+                                    style={styles.botaoOpcoes}
+                                    onPress={() => abrirOpcoes(item)}
+                                    hitSlop={10}
+                                >
+                                    <Text style={styles.opcoes}>
+                                        •••
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* DECORAÇÃO */}
                 <View style={styles.decoracao}>
-                    <Text style={styles.decoracaoEmoji}>🧩</Text>
-                    <Text style={styles.coracao}>♥</Text>
-                    <Text style={styles.decoracaoEmoji}>🌈</Text>
+                    <Text style={styles.decoracaoEmoji}>
+                        🧩
+                    </Text>
+
+                    <Text style={styles.coracao}>
+                        ♥
+                    </Text>
+
+                    <Text style={styles.decoracaoEmoji}>
+                        🌈
+                    </Text>
                 </View>
             </ScrollView>
 
-            {/* Botão para cadastrar */}
+            {/* BOTÃO + */}
             <Pressable
                 style={styles.botaoAdicionar}
                 onPress={() => router.push('/nova-orientacao')}
             >
-                <Text style={styles.mais}>+</Text>
+                <Text style={styles.mais}>
+                    +
+                </Text>
             </Pressable>
         </SafeAreaView>
     );
@@ -436,6 +587,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         elevation: 7,
+
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 3,
+        },
+        shadowOpacity: 0.18,
+        shadowRadius: 4,
     },
 
     mais: {
@@ -443,6 +602,32 @@ const styles = StyleSheet.create({
         fontSize: 35,
         fontWeight: '300',
         marginTop: -3,
+    },
+
+    listaVazia: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        paddingVertical: 35,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+    },
+
+    emojiVazio: {
+        fontSize: 38,
+    },
+
+    tituloVazio: {
+        color: '#46545B',
+        fontSize: 14,
+        fontWeight: '700',
+        marginTop: 10,
+    },
+
+    textoVazio: {
+        color: '#929DA2',
+        fontSize: 10,
+        marginTop: 5,
+        textAlign: 'center',
     },
 
     decoracao: {

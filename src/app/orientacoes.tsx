@@ -1,5 +1,7 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+
 import {
     Pressable,
     ScrollView,
@@ -8,129 +10,78 @@ import {
     TextInput,
     View,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type OrientacaoBusca = {
+type Orientacao = {
     id: string;
     titulo: string;
-    descricao: string;
     categoria: string;
     icone: string;
+    introducao?: string;
+    dicas?: string[];
+    lembrete?: string;
 };
 
-const orientacoesBusca: OrientacaoBusca[] = [
-    {
-        id: '1',
-        titulo: 'Como agir em uma crise sensorial',
-        descricao:
-            'Estratégias para acolher a criança durante momentos de sobrecarga sensorial.',
-        categoria: 'Crise Sensorial',
-        icone: '🧩',
-    },
-    {
-        id: '2',
-        titulo: 'Identificando sinais de sobrecarga',
-        descricao:
-            'Conheça alguns sinais que podem indicar desconforto ou sobrecarga sensorial.',
-        categoria: 'Crise Sensorial',
-        icone: '💙',
-    },
-    {
-        id: '3',
-        titulo: 'Criando um ambiente mais tranquilo',
-        descricao:
-            'Veja formas de tornar o ambiente mais confortável e previsível.',
-        categoria: 'Crise Sensorial',
-        icone: '☁️',
-    },
-    {
-        id: '4',
-        titulo: 'Incentivando a comunicação',
-        descricao:
-            'Conheça maneiras de apoiar a comunicação respeitando o ritmo da criança.',
-        categoria: 'Comunicação',
-        icone: '💬',
-    },
-    {
-        id: '5',
-        titulo: 'Comunicação além da fala',
-        descricao:
-            'Entenda como gestos, imagens e outras formas de expressão podem ajudar.',
-        categoria: 'Comunicação',
-        icone: '🗨️',
-    },
-    {
-        id: '6',
-        titulo: 'Dando tempo para responder',
-        descricao:
-            'Saiba por que respeitar o tempo de processamento pode facilitar a comunicação.',
-        categoria: 'Comunicação',
-        icone: '⏳',
-    },
-    {
-        id: '7',
-        titulo: 'Criando uma rotina previsível',
-        descricao:
-            'Veja como organizar atividades do dia de forma mais clara e previsível.',
-        categoria: 'Rotinas',
-        icone: '🌈',
-    },
-    {
-        id: '8',
-        titulo: 'Preparando para mudanças',
-        descricao:
-            'Estratégias para comunicar mudanças e ajudar na adaptação da rotina.',
-        categoria: 'Rotinas',
-        icone: '📅',
-    },
-    {
-        id: '9',
-        titulo: 'Rotina visual',
-        descricao:
-            'Entenda como recursos visuais podem auxiliar na organização das atividades.',
-        categoria: 'Rotinas',
-        icone: '🖼️',
-    },
-    {
-        id: '10',
-        titulo: 'Conhecendo os direitos',
-        descricao:
-            'Informações introdutórias sobre direitos da pessoa com Transtorno do Espectro Autista.',
-        categoria: 'Direitos',
-        icone: '⚖️',
-    },
-    {
-        id: '11',
-        titulo: 'Inclusão no ambiente escolar',
-        descricao:
-            'Conheça aspectos importantes relacionados à inclusão e ao ambiente escolar.',
-        categoria: 'Direitos',
-        icone: '🎒',
-    },
-    {
-        id: '12',
-        titulo: 'Atendimento prioritário',
-        descricao:
-            'Entenda informações gerais relacionadas ao atendimento prioritário.',
-        categoria: 'Direitos',
-        icone: '⭐',
-    },
-];
+
 
 export default function OrientacoesScreen() {
     const [busca, setBusca] = useState('');
+    const [orientacoes, setOrientacoes] = useState<Orientacao[]>([]);
+
+    async function carregarOrientacoes() {
+        try {
+            const dadosSalvos =
+                await AsyncStorage.getItem('orientacoes');
+
+            if (dadosSalvos) {
+                const lista: Orientacao[] =
+                    JSON.parse(dadosSalvos);
+
+                setOrientacoes(lista);
+            } else {
+                setOrientacoes([]);
+            }
+        } catch (erro) {
+            console.log(
+                'Erro ao carregar orientações:',
+                erro
+            );
+
+            setOrientacoes([]);
+        }
+    }
+
+    useFocusEffect(
+        useCallback(() => {
+            carregarOrientacoes();
+        }, [])
+    );
 
     const textoBusca = busca.trim().toLowerCase();
 
-    const resultados = orientacoesBusca.filter((item) => {
-        const titulo = item.titulo.toLowerCase();
-        const descricao = item.descricao.toLowerCase();
-        const categoria = item.categoria.toLowerCase();
+    const resultados = orientacoes.filter((item) => {
+        const titulo =
+            item.titulo?.toLowerCase() ?? '';
+
+        const introducao =
+            item.introducao?.toLowerCase() ?? '';
+
+        const categoria =
+            item.categoria?.toLowerCase() ?? '';
+
+        const dicas =
+            item.dicas?.join(' ').toLowerCase() ?? '';
+
+        const lembrete =
+            item.lembrete?.toLowerCase() ?? '';
 
         return (
             titulo.includes(textoBusca) ||
-            descricao.includes(textoBusca) ||
-            categoria.includes(textoBusca)
+            introducao.includes(textoBusca) ||
+            categoria.includes(textoBusca) ||
+            dicas.includes(textoBusca) ||
+            lembrete.includes(textoBusca)
         );
     });
 
@@ -144,7 +95,6 @@ export default function OrientacoesScreen() {
             },
         });
     }
-
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView
@@ -248,7 +198,8 @@ export default function OrientacoesScreen() {
                                                 style={styles.descricaoResultado}
                                                 numberOfLines={2}
                                             >
-                                                {item.descricao}
+                                                {item.introducao ||
+                                                    'Toque para visualizar esta orientação.'}
                                             </Text>
 
                                             <Text style={styles.lerMais}>
