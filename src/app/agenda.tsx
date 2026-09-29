@@ -1,5 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
+import {
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+} from 'firebase/firestore';
 import { useCallback, useState } from 'react';
 import {
     Alert,
@@ -10,6 +15,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../../config/firebase';
 
 type Compromisso = {
     id: string;
@@ -69,16 +75,36 @@ export default function AgendaScreen() {
     // Busca os compromissos salvos no celular
     async function carregarCompromissos() {
         try {
-            const dadosSalvos = await AsyncStorage.getItem('compromissos');
+            const usuario = auth.currentUser;
 
-            if (dadosSalvos) {
-                const lista = JSON.parse(dadosSalvos);
-                setCompromissos(lista);
-            } else {
+            if (!usuario) {
                 setCompromissos([]);
+                return;
             }
+
+            const referencia = collection(
+                db,
+                'usuarios',
+                usuario.uid,
+                'compromissos'
+            );
+
+            const resultado = await getDocs(referencia);
+
+            const lista: Compromisso[] = resultado.docs.map(
+                (documento) => ({
+                    id: documento.id,
+                    ...(documento.data() as Omit<Compromisso, 'id'>),
+                })
+            );
+
+            setCompromissos(lista);
+
         } catch (erro) {
-            console.log('Erro ao carregar compromissos:', erro);
+            console.log(
+                'Erro ao carregar compromissos:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',
@@ -120,18 +146,37 @@ export default function AgendaScreen() {
     // Exclui o compromisso do armazenamento
     async function excluirCompromisso(id: string) {
         try {
-            const novaLista = compromissos.filter(
-                (compromisso) => compromisso.id !== id
+            const usuario = auth.currentUser;
+
+            if (!usuario) {
+                Alert.alert(
+                    'Erro',
+                    'Você precisa estar conectada.'
+                );
+                return;
+            }
+
+            await deleteDoc(
+                doc(
+                    db,
+                    'usuarios',
+                    usuario.uid,
+                    'compromissos',
+                    id
+                )
             );
 
-            await AsyncStorage.setItem(
-                'compromissos',
-                JSON.stringify(novaLista)
+            setCompromissos((listaAtual) =>
+                listaAtual.filter(
+                    (compromisso) => compromisso.id !== id
+                )
             );
 
-            setCompromissos(novaLista);
         } catch (erro) {
-            console.log('Erro ao excluir compromisso:', erro);
+            console.log(
+                'Erro ao excluir compromisso:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',

@@ -1,4 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+    doc,
+    getDoc,
+    setDoc,
+} from 'firebase/firestore';
+
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -13,6 +18,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../../config/firebase';
 
 const categorias = [
     { nome: 'Comunicação', icone: '💬' },
@@ -57,25 +63,27 @@ export default function NovaAtividadeScreen() {
 
     async function carregarAtividade(id: string) {
         try {
-            const dadosSalvos =
-                await AsyncStorage.getItem('atividades');
+            const usuario = auth.currentUser;
 
-            if (!dadosSalvos) {
+            if (!usuario) {
                 Alert.alert(
                     'Erro',
-                    'Não foi possível encontrar a atividade.'
+                    'Você precisa estar conectada.'
                 );
                 return;
             }
 
-            const atividades: Atividade[] =
-                JSON.parse(dadosSalvos);
-
-            const atividadeEncontrada = atividades.find(
-                (item) => item.id === id
+            const referencia = doc(
+                db,
+                'usuarios',
+                usuario.uid,
+                'atividades',
+                id
             );
 
-            if (!atividadeEncontrada) {
+            const documento = await getDoc(referencia);
+
+            if (!documento.exists()) {
                 Alert.alert(
                     'Erro',
                     'Não foi possível encontrar a atividade.'
@@ -83,14 +91,21 @@ export default function NovaAtividadeScreen() {
                 return;
             }
 
-            setTitulo(atividadeEncontrada.titulo);
-            setCategoria(atividadeEncontrada.categoria);
-            setData(atividadeEncontrada.data);
-            setHorario(atividadeEncontrada.horario);
-            setDescricao(atividadeEncontrada.descricao);
-            setObservacoes(atividadeEncontrada.observacoes);
+            const atividade =
+                documento.data() as Omit<Atividade, 'id'>;
+
+            setTitulo(atividade.titulo ?? '');
+            setCategoria(atividade.categoria ?? '');
+            setData(atividade.data ?? '');
+            setHorario(atividade.horario ?? '');
+            setDescricao(atividade.descricao ?? '');
+            setObservacoes(atividade.observacoes ?? '');
+
         } catch (erro) {
-            console.log('Erro ao carregar atividade:', erro);
+            console.log(
+                'Erro ao carregar atividade:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',
@@ -99,6 +114,29 @@ export default function NovaAtividadeScreen() {
         }
     }
 
+    function formatarData(texto: string) {
+        const numeros = texto.replace(/\D/g, '').slice(0, 8);
+
+        if (numeros.length <= 2) {
+            return numeros;
+        }
+
+        if (numeros.length <= 4) {
+            return `${numeros.slice(0, 2)}/${numeros.slice(2)}`;
+        }
+
+        return `${numeros.slice(0, 2)}/${numeros.slice(2, 4)}/${numeros.slice(4)}`;
+    }
+
+    function formatarHorario(texto: string) {
+        const numeros = texto.replace(/\D/g, '').slice(0, 4);
+
+        if (numeros.length <= 2) {
+            return numeros;
+        }
+
+        return `${numeros.slice(0, 2)}:${numeros.slice(2)}`;
+    }
     async function salvarAtividade() {
         if (
             !titulo.trim() ||
@@ -114,35 +152,36 @@ export default function NovaAtividadeScreen() {
         }
 
         try {
-            const dadosSalvos =
-                await AsyncStorage.getItem('atividades');
+            const usuario = auth.currentUser;
 
-            const atividadesAtuais: Atividade[] =
-                dadosSalvos ? JSON.parse(dadosSalvos) : [];
-
-            // EDITAR ATIVIDADE EXISTENTE
-            if (modoEdicao && idParametro) {
-                const listaAtualizada = atividadesAtuais.map(
-                    (item) => {
-                        if (item.id === idParametro) {
-                            return {
-                                ...item,
-                                titulo: titulo.trim(),
-                                categoria: categoria.trim(),
-                                data: data.trim(),
-                                horario: horario.trim(),
-                                descricao: descricao.trim(),
-                                observacoes: observacoes.trim(),
-                            };
-                        }
-
-                        return item;
-                    }
+            if (!usuario) {
+                Alert.alert(
+                    'Erro',
+                    'Você precisa estar conectada.'
                 );
+                return;
+            }
 
-                await AsyncStorage.setItem(
-                    'atividades',
-                    JSON.stringify(listaAtualizada)
+            const dadosAtividade = {
+                titulo: titulo.trim(),
+                categoria: categoria.trim(),
+                data: data.trim(),
+                horario: horario.trim(),
+                descricao: descricao.trim(),
+                observacoes: observacoes.trim(),
+            };
+
+            // EDITAR
+            if (modoEdicao && idParametro) {
+                await setDoc(
+                    doc(
+                        db,
+                        'usuarios',
+                        usuario.uid,
+                        'atividades',
+                        idParametro
+                    ),
+                    dadosAtividade
                 );
 
                 Alert.alert(
@@ -160,25 +199,18 @@ export default function NovaAtividadeScreen() {
                 return;
             }
 
-            // CADASTRAR NOVA ATIVIDADE
-            const novaAtividade: Atividade = {
-                id: Date.now().toString(),
-                titulo: titulo.trim(),
-                categoria: categoria.trim(),
-                data: data.trim(),
-                horario: horario.trim(),
-                descricao: descricao.trim(),
-                observacoes: observacoes.trim(),
-            };
+            // CADASTRAR
+            const novoId = Date.now().toString();
 
-            const novaLista = [
-                ...atividadesAtuais,
-                novaAtividade,
-            ];
-
-            await AsyncStorage.setItem(
-                'atividades',
-                JSON.stringify(novaLista)
+            await setDoc(
+                doc(
+                    db,
+                    'usuarios',
+                    usuario.uid,
+                    'atividades',
+                    novoId
+                ),
+                dadosAtividade
             );
 
             Alert.alert(
@@ -192,8 +224,12 @@ export default function NovaAtividadeScreen() {
                     },
                 ]
             );
+
         } catch (erro) {
-            console.log('Erro ao salvar atividade:', erro);
+            console.log(
+                'Erro ao salvar atividade:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',
@@ -203,7 +239,6 @@ export default function NovaAtividadeScreen() {
             );
         }
     }
-
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
@@ -323,7 +358,9 @@ export default function NovaAtividadeScreen() {
                                     placeholder="DD/MM/AAAA"
                                     placeholderTextColor="#A1AAAE"
                                     value={data}
-                                    onChangeText={setData}
+                                    onChangeText={(texto) => {
+                                        setData(formatarData(texto));
+                                    }}
                                     keyboardType="numeric"
                                     maxLength={10}
                                 />
@@ -341,7 +378,9 @@ export default function NovaAtividadeScreen() {
                                     placeholder="HH:MM"
                                     placeholderTextColor="#A1AAAE"
                                     value={horario}
-                                    onChangeText={setHorario}
+                                    onChangeText={(texto) => {
+                                        setHorario(formatarHorario(texto));
+                                    }}
                                     keyboardType="numeric"
                                     maxLength={5}
                                 />

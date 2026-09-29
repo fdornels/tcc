@@ -1,4 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+} from 'firebase/firestore';
+
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -10,6 +16,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../../config/firebase';
 
 type Atividade = {
     id: string;
@@ -72,21 +79,36 @@ export default function AtividadesScreen() {
 
     async function carregarAtividades() {
         try {
-            const dadosSalvos =
-                await AsyncStorage.getItem('atividades');
+            const usuario = auth.currentUser;
 
-            if (dadosSalvos) {
-                const lista: Atividade[] = JSON.parse(dadosSalvos);
-
-                /*
-                 * Mostra as atividades mais novas primeiro.
-                 */
-                setAtividades([...lista].reverse());
-            } else {
+            if (!usuario) {
                 setAtividades([]);
+                return;
             }
+
+            const referencia = collection(
+                db,
+                'usuarios',
+                usuario.uid,
+                'atividades'
+            );
+
+            const resultado = await getDocs(referencia);
+
+            const lista: Atividade[] = resultado.docs.map(
+                (documento) => ({
+                    id: documento.id,
+                    ...(documento.data() as Omit<Atividade, 'id'>),
+                })
+            );
+
+            setAtividades(lista.reverse());
+
         } catch (erro) {
-            console.log('Erro ao carregar atividades:', erro);
+            console.log(
+                'Erro ao carregar atividades:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',
@@ -162,36 +184,42 @@ export default function AtividadesScreen() {
      */
     async function excluirAtividade(id: string) {
         try {
-            const dadosSalvos =
-                await AsyncStorage.getItem('atividades');
+            const usuario = auth.currentUser;
 
-            if (!dadosSalvos) {
+            if (!usuario) {
+                Alert.alert(
+                    'Erro',
+                    'Você precisa estar conectada.'
+                );
                 return;
             }
 
-            const listaAtual: Atividade[] =
-                JSON.parse(dadosSalvos);
-
-            const listaAtualizada = listaAtual.filter(
-                (item) => item.id !== id
+            await deleteDoc(
+                doc(
+                    db,
+                    'usuarios',
+                    usuario.uid,
+                    'atividades',
+                    id
+                )
             );
 
-            await AsyncStorage.setItem(
-                'atividades',
-                JSON.stringify(listaAtualizada)
+            setAtividades((listaAtual) =>
+                listaAtual.filter(
+                    (atividade) => atividade.id !== id
+                )
             );
-
-            /*
-             * Recarrega a lista depois da exclusão.
-             */
-            await carregarAtividades();
 
             Alert.alert(
                 'Atividade excluída',
                 'A atividade foi removida com sucesso.'
             );
+
         } catch (erro) {
-            console.log('Erro ao excluir atividade:', erro);
+            console.log(
+                'Erro ao excluir atividade:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',

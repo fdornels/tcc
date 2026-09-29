@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
     Alert,
@@ -13,6 +13,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../../config/firebase';
 
 type Compromisso = {
     id: string;
@@ -50,24 +51,27 @@ export default function NovoCompromissoScreen() {
 
     async function carregarCompromisso(id: string) {
         try {
-            const dadosSalvos = await AsyncStorage.getItem('compromissos');
+            const usuario = auth.currentUser;
 
-            if (!dadosSalvos) {
+            if (!usuario) {
                 Alert.alert(
                     'Erro',
-                    'Não foi possível encontrar o compromisso.'
+                    'Você precisa estar conectada.'
                 );
                 return;
             }
 
-            const compromissos: Compromisso[] =
-                JSON.parse(dadosSalvos);
-
-            const compromissoEncontrado = compromissos.find(
-                (item) => item.id === id
+            const referencia = doc(
+                db,
+                'usuarios',
+                usuario.uid,
+                'compromissos',
+                id
             );
 
-            if (!compromissoEncontrado) {
+            const documento = await getDoc(referencia);
+
+            if (!documento.exists()) {
                 Alert.alert(
                     'Erro',
                     'Não foi possível encontrar o compromisso.'
@@ -75,14 +79,21 @@ export default function NovoCompromissoScreen() {
                 return;
             }
 
-            setTitulo(compromissoEncontrado.titulo);
-            setTipo(compromissoEncontrado.tipo);
-            setData(compromissoEncontrado.data);
-            setHorario(compromissoEncontrado.horario);
-            setLocal(compromissoEncontrado.local);
-            setObservacoes(compromissoEncontrado.observacoes);
+            const compromisso =
+                documento.data() as Omit<Compromisso, 'id'>;
+
+            setTitulo(compromisso.titulo ?? '');
+            setTipo(compromisso.tipo ?? '');
+            setData(compromisso.data ?? '');
+            setHorario(compromisso.horario ?? '');
+            setLocal(compromisso.local ?? '');
+            setObservacoes(compromisso.observacoes ?? '');
+
         } catch (erro) {
-            console.log('Erro ao carregar compromisso:', erro);
+            console.log(
+                'Erro ao carregar compromisso:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',
@@ -91,6 +102,29 @@ export default function NovoCompromissoScreen() {
         }
     }
 
+    function formatarData(texto: string) {
+        const numeros = texto.replace(/\D/g, '').slice(0, 8);
+
+        if (numeros.length <= 2) {
+            return numeros;
+        }
+
+        if (numeros.length <= 4) {
+            return `${numeros.slice(0, 2)}/${numeros.slice(2)}`;
+        }
+
+        return `${numeros.slice(0, 2)}/${numeros.slice(2, 4)}/${numeros.slice(4)}`;
+    }
+
+    function formatarHorario(texto: string) {
+        const numeros = texto.replace(/\D/g, '').slice(0, 4);
+
+        if (numeros.length <= 2) {
+            return numeros;
+        }
+
+        return `${numeros.slice(0, 2)}:${numeros.slice(2)}`;
+    }
     async function salvarCompromisso() {
         if (!titulo.trim() || !data.trim() || !horario.trim()) {
             Alert.alert(
@@ -101,54 +135,17 @@ export default function NovoCompromissoScreen() {
         }
 
         try {
-            const dadosSalvos =
-                await AsyncStorage.getItem('compromissos');
+            const usuario = auth.currentUser;
 
-            const compromissosAtuais: Compromisso[] =
-                dadosSalvos ? JSON.parse(dadosSalvos) : [];
-
-            // EDITAR
-            if (modoEdicao && idParametro) {
-                const listaAtualizada = compromissosAtuais.map(
-                    (item) => {
-                        if (item.id === idParametro) {
-                            return {
-                                ...item,
-                                titulo: titulo.trim(),
-                                tipo: tipo.trim(),
-                                data: data.trim(),
-                                horario: horario.trim(),
-                                local: local.trim(),
-                                observacoes: observacoes.trim(),
-                            };
-                        }
-
-                        return item;
-                    }
-                );
-
-                await AsyncStorage.setItem(
-                    'compromissos',
-                    JSON.stringify(listaAtualizada)
-                );
-
+            if (!usuario) {
                 Alert.alert(
-                    'Alterações salvas! 💙',
-                    'O compromisso foi atualizado.',
-                    [
-                        {
-                            text: 'OK',
-                            onPress: () => router.replace('/agenda'),
-                        },
-                    ]
+                    'Erro',
+                    'Você precisa estar conectada.'
                 );
-
                 return;
             }
 
-            // CADASTRAR NOVO
-            const novoCompromisso: Compromisso = {
-                id: Date.now().toString(),
+            const dadosCompromisso = {
                 titulo: titulo.trim(),
                 tipo: tipo.trim(),
                 data: data.trim(),
@@ -157,14 +154,46 @@ export default function NovoCompromissoScreen() {
                 observacoes: observacoes.trim(),
             };
 
-            const novaLista = [
-                ...compromissosAtuais,
-                novoCompromisso,
-            ];
+            // EDITAR COMPROMISSO EXISTENTE
+            if (modoEdicao && idParametro) {
+                await setDoc(
+                    doc(
+                        db,
+                        'usuarios',
+                        usuario.uid,
+                        'compromissos',
+                        idParametro
+                    ),
+                    dadosCompromisso
+                );
 
-            await AsyncStorage.setItem(
-                'compromissos',
-                JSON.stringify(novaLista)
+                Alert.alert(
+                    'Alterações salvas! 💙',
+                    'O compromisso foi atualizado.',
+                    [
+                        {
+                            text: 'OK',
+                            onPress: () =>
+                                router.replace('/agenda'),
+                        },
+                    ]
+                );
+
+                return;
+            }
+
+            // CADASTRAR NOVO COMPROMISSO
+            const novoId = Date.now().toString();
+
+            await setDoc(
+                doc(
+                    db,
+                    'usuarios',
+                    usuario.uid,
+                    'compromissos',
+                    novoId
+                ),
+                dadosCompromisso
             );
 
             Alert.alert(
@@ -173,12 +202,17 @@ export default function NovoCompromissoScreen() {
                 [
                     {
                         text: 'OK',
-                        onPress: () => router.replace('/agenda'),
+                        onPress: () =>
+                            router.replace('/agenda'),
                     },
                 ]
             );
+
         } catch (erro) {
-            console.log('Erro ao salvar compromisso:', erro);
+            console.log(
+                'Erro ao salvar compromisso:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',
@@ -188,7 +222,6 @@ export default function NovoCompromissoScreen() {
             );
         }
     }
-
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
@@ -270,7 +303,9 @@ export default function NovoCompromissoScreen() {
                                     placeholder="DD/MM/AAAA"
                                     placeholderTextColor="#A1AAAE"
                                     value={data}
-                                    onChangeText={setData}
+                                    onChangeText={(texto) => {
+                                        setData(formatarData(texto));
+                                    }}
                                     keyboardType="numeric"
                                     maxLength={10}
                                 />
@@ -286,7 +321,9 @@ export default function NovoCompromissoScreen() {
                                     placeholder="HH:MM"
                                     placeholderTextColor="#A1AAAE"
                                     value={horario}
-                                    onChangeText={setHorario}
+                                    onChangeText={(texto) => {
+                                        setHorario(formatarHorario(texto));
+                                    }}
                                     keyboardType="numeric"
                                     maxLength={5}
                                 />

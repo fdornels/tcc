@@ -32,7 +32,11 @@ export default function HomeScreen() {
                         </Text>
                     </View>
 
-                    <Text style={styles.sino}>♧</Text>
+                    <Pressable
+                        onPress={() => router.push('/configuracoes')}
+                    >
+                        <Text style={styles.sino}>⚙️</Text>
+                    </Pressable>
                 </View>
 
                 {/* Boas-vindas */}
@@ -88,7 +92,7 @@ export default function HomeScreen() {
 
                     <Pressable
                         style={[styles.card, styles.cardRosa]}
-                        onPress={() => router.push('/crianca')}
+                        onPress={() => router.push('/minha-crianca')}
                     >
                         <Text style={styles.icone}>👧🏻</Text>
                         <Text style={styles.cardTitulo}>Minha Criança</Text>

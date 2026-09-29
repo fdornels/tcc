@@ -1,6 +1,9 @@
 import { router } from 'expo-router';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
+
 import {
+    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -10,13 +13,57 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth } from '../../config/firebase';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
 
-    function entrar() {
-        router.replace('/home');
+    async function entrar() {
+        const emailLimpo = email.trim().toLowerCase();
+
+        if (!emailLimpo || !senha) {
+            Alert.alert(
+                'Campos obrigatórios',
+                'Digite seu e-mail e sua senha.'
+            );
+            return;
+        }
+
+        try {
+            await signInWithEmailAndPassword(
+                auth,
+                emailLimpo,
+                senha
+            );
+
+            router.replace('/home');
+        } catch (erro: any) {
+            console.log('Erro no login:', erro);
+
+            let mensagem =
+                'E-mail ou senha incorretos. Verifique os dados e tente novamente.';
+
+            if (erro?.code === 'auth/invalid-email') {
+                mensagem =
+                    'Digite um endereço de e-mail válido.';
+            } else if (
+                erro?.code === 'auth/network-request-failed'
+            ) {
+                mensagem =
+                    'Não foi possível conectar ao servidor. Verifique sua internet.';
+            } else if (
+                erro?.code === 'auth/too-many-requests'
+            ) {
+                mensagem =
+                    'Muitas tentativas foram realizadas. Aguarde um pouco e tente novamente.';
+            }
+
+            Alert.alert(
+                'Não foi possível entrar',
+                mensagem
+            );
+        }
     }
 
     return (
@@ -71,7 +118,11 @@ export default function LoginScreen() {
                         <Text style={styles.textoBotao}>Entrar</Text>
                     </Pressable>
 
-                    <Pressable>
+                    <Pressable
+                        onPress={() =>
+                            router.push('/esqueci-senha')
+                        }
+                    >
                         <Text style={styles.esqueciSenha}>
                             Esqueci minha senha
                         </Text>
@@ -82,7 +133,7 @@ export default function LoginScreen() {
                             Ainda não tem uma conta?{' '}
                         </Text>
 
-                        <Pressable>
+                        <Pressable onPress={() => router.push('/cadastro')}>
                             <Text style={styles.cadastreSe}>Cadastre-se</Text>
                         </Pressable>
                     </View>
