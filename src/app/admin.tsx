@@ -1,5 +1,8 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { doc, getDoc } from 'firebase/firestore';
+import { useCallback, useState } from 'react';
 import {
+    ActivityIndicator,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -7,8 +10,75 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../../config/firebase';
 
 export default function AdminScreen() {
+    const [verificando, setVerificando] = useState(true);
+    const [ehAdmin, setEhAdmin] = useState(false);
+
+    async function verificarAdmin() {
+        try {
+            setVerificando(true);
+
+            const usuario = auth.currentUser;
+
+            if (!usuario) {
+                setEhAdmin(false);
+                router.replace('/login');
+                return;
+            }
+
+            const documento = await getDoc(
+                doc(db, 'usuarios', usuario.uid)
+            );
+
+            const admin =
+                documento.exists() &&
+                documento.data().admin === true;
+
+            setEhAdmin(admin);
+
+            if (!admin) {
+                router.replace('/home');
+            }
+        } catch (erro) {
+            console.log(
+                'Erro ao verificar administrador:',
+                erro
+            );
+
+            setEhAdmin(false);
+            router.replace('/home');
+        } finally {
+            setVerificando(false);
+        }
+    }
+
+    useFocusEffect(
+        useCallback(() => {
+            verificarAdmin();
+        }, [])
+    );
+
+    if (verificando || !ehAdmin) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View
+                    style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                >
+                    <ActivityIndicator size="large" />
+                    <Text style={{ marginTop: 12 }}>
+                        Verificando acesso...
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView

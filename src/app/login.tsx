@@ -18,7 +18,7 @@ import { auth } from '../../config/firebase';
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
-
+    const [exibirSenha, setExibirSenha] = useState(false);
     async function entrar() {
         const emailLimpo = email.trim().toLowerCase();
 
@@ -111,8 +111,17 @@ export default function LoginScreen() {
                         placeholderTextColor="#9A9A9A"
                         value={senha}
                         onChangeText={setSenha}
-                        secureTextEntry
+                        secureTextEntry={!exibirSenha}
                     />
+
+                    <Pressable
+                        onPress={() => setExibirSenha(!exibirSenha)}
+                        style={styles.exibirSenhaArea}
+                    >
+                        <Text style={styles.exibirSenhaTexto}>
+                            {exibirSenha ? '🙈 Ocultar senha' : '👁️ Exibir senha'}
+                        </Text>
+                    </Pressable>
 
                     <Pressable style={styles.botaoEntrar} onPress={entrar}>
                         <Text style={styles.textoBotao}>Entrar</Text>
@@ -238,6 +247,18 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: '#333333',
         marginBottom: 16,
+    },
+
+    exibirSenhaArea: {
+        alignSelf: 'flex-end',
+        marginTop: -8,
+        marginBottom: 14,
+    },
+
+    exibirSenhaTexto: {
+        color: '#42A5D5',
+        fontSize: 12,
+        fontWeight: '600',
     },
 
     botaoEntrar: {

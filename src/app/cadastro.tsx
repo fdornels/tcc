@@ -19,6 +19,7 @@ import { auth } from '../../config/firebase';
 
 export default function CadastroScreen() {
     const [nome, setNome] = useState('');
+    const [exibirSenha, setExibirSenha] = useState(false);
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
     const [confirmarSenha, setConfirmarSenha] = useState('');
@@ -204,7 +205,7 @@ export default function CadastroScreen() {
                             placeholderTextColor="#9A9A9A"
                             value={senha}
                             onChangeText={setSenha}
-                            secureTextEntry
+                            secureTextEntry={!exibirSenha}
                         />
 
                         <Text style={styles.dicaSenha}>
@@ -221,9 +222,17 @@ export default function CadastroScreen() {
                             placeholderTextColor="#9A9A9A"
                             value={confirmarSenha}
                             onChangeText={setConfirmarSenha}
-                            secureTextEntry
-                            onSubmitEditing={cadastrar}
+                            secureTextEntry={!exibirSenha}
+
                         />
+                        <Pressable
+                            onPress={() => setExibirSenha(!exibirSenha)}
+                            style={styles.exibirSenhaArea}
+                        >
+                            <Text style={styles.exibirSenhaTexto}>
+                                {exibirSenha ? '🙈 Ocultar senhas' : '👁️ Exibir senhas'}
+                            </Text>
+                        </Pressable>
 
                         <Pressable
                             style={[
@@ -403,6 +412,17 @@ const styles = StyleSheet.create({
         marginTop: -8,
         marginBottom: 13,
         marginLeft: 3,
+    },
+    exibirSenhaArea: {
+        alignSelf: 'flex-end',
+        marginTop: -5,
+        marginBottom: 15,
+    },
+
+    exibirSenhaTexto: {
+        color: '#42A5D5',
+        fontSize: 12,
+        fontWeight: '600',
     },
 
     botaoCadastrar: {

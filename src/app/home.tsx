@@ -1,4 +1,11 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+} from 'firebase/firestore';
+import { useCallback, useState } from 'react';
 import {
     Pressable,
     ScrollView,
@@ -7,8 +14,117 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../../config/firebase';
+
+type Compromisso = {
+    id: string;
+    titulo: string;
+    data: string;
+    horario: string;
+};
 
 export default function HomeScreen() {
+    const nomeUsuario =
+        auth.currentUser?.displayName || 'Usuária';
+
+    const [ehAdmin, setEhAdmin] = useState(false);
+
+
+
+    const [proximoCompromisso, setProximoCompromisso] =
+        useState<Compromisso | null>(null);
+
+    async function verificarAdmin() {
+        try {
+            const usuario = auth.currentUser;
+
+            if (!usuario) {
+                setEhAdmin(false);
+                return;
+            }
+
+            const documento = await getDoc(
+                doc(db, 'usuarios', usuario.uid)
+            );
+
+            setEhAdmin(
+                documento.exists() &&
+                documento.data().admin === true
+            );
+        } catch (erro) {
+            console.log(
+                'Erro ao verificar admin:',
+                erro
+            );
+
+            setEhAdmin(false);
+        }
+    }
+    async function carregarProximoCompromisso() {
+        try {
+            const usuario = auth.currentUser;
+
+            if (!usuario) {
+                setProximoCompromisso(null);
+                return;
+            }
+
+            const referencia = collection(
+                db,
+                'usuarios',
+                usuario.uid,
+                'compromissos'
+            );
+
+            const resultado = await getDocs(referencia);
+
+            const compromissos: Compromisso[] =
+                resultado.docs.map((documento) => ({
+                    id: documento.id,
+                    ...(documento.data() as Omit<Compromisso, 'id'>),
+                }));
+
+            const converterData = (valor: string) => {
+                const [dia, mes, ano] = valor.split('/');
+
+                return new Date(
+                    Number(ano),
+                    Number(mes) - 1,
+                    Number(dia)
+                );
+            };
+
+            const agora = new Date();
+            agora.setHours(0, 0, 0, 0);
+
+            const futuros = compromissos
+                .filter(
+                    (compromisso) =>
+                        converterData(compromisso.data) >= agora
+                )
+                .sort(
+                    (a, b) =>
+                        converterData(a.data).getTime() -
+                        converterData(b.data).getTime()
+                );
+
+            setProximoCompromisso(futuros[0] ?? null);
+
+        } catch (erro) {
+            console.log(
+                'Erro ao carregar próximo compromisso:',
+                erro
+            );
+        }
+    }
+
+    useFocusEffect(
+        useCallback(() => {
+            verificarAdmin();
+            carregarProximoCompromisso();
+        }, [])
+    );
+
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView
@@ -17,9 +133,13 @@ export default function HomeScreen() {
             >
                 {/* Cabeçalho */}
                 <View style={styles.cabecalho}>
-                    <Pressable onPress={() => router.push('/admin')}>
-                        <Text style={styles.menu}>☰</Text>
-                    </Pressable>
+                    {ehAdmin ? (
+                        <Pressable onPress={() => router.push('/admin')}>
+                            <Text style={styles.menu}>☰</Text>
+                        </Pressable>
+                    ) : (
+                        <View style={{ width: 24 }} />
+                    )}
 
                     <View style={styles.logoArea}>
                         <Text style={styles.logo}>
@@ -46,13 +166,39 @@ export default function HomeScreen() {
                     </View>
 
                     <View style={styles.boasVindasTexto}>
-                        <Text style={styles.ola}>Olá, Fernanda!</Text>
+                        <Text style={styles.ola}>
+                            Olá, {nomeUsuario}!
+                        </Text>
                         <Text style={styles.mensagem}>
                             Que bom te ver por aqui! 💙
                         </Text>
                     </View>
                 </View>
 
+                <View style={styles.proximoCard}>
+                    <Text style={styles.proximoTitulo}>
+                        🗓️ Próximo compromisso
+                    </Text>
+
+                    {proximoCompromisso ? (
+                        <>
+                            <Text style={styles.proximoNome}>
+                                {proximoCompromisso.titulo}
+                            </Text>
+
+                            <Text style={styles.proximoDetalhe}>
+                                {proximoCompromisso.data}
+                                {proximoCompromisso.horario
+                                    ? ` • ${proximoCompromisso.horario}`
+                                    : ''}
+                            </Text>
+                        </>
+                    ) : (
+                        <Text style={styles.proximoDetalhe}>
+                            Nenhum compromisso próximo.
+                        </Text>
+                    )}
+                </View>
                 <Text style={styles.tituloSecao}>Sua rotina rápida</Text>
 
                 {/* Cards */}
@@ -232,7 +378,31 @@ const styles = StyleSheet.create({
         fontSize: 13,
         marginTop: 5,
     },
+    proximoCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 18,
+        padding: 16,
+        marginBottom: 20,
+    },
 
+    proximoTitulo: {
+        color: '#427DA1',
+        fontSize: 13,
+        fontWeight: '700',
+        marginBottom: 7,
+    },
+
+    proximoNome: {
+        color: '#3E4850',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+
+    proximoDetalhe: {
+        color: '#68747A',
+        fontSize: 12,
+        marginTop: 5,
+    },
     tituloSecao: {
         color: '#48545A',
         fontSize: 15,

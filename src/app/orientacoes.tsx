@@ -1,8 +1,10 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
+import { collection, getDocs } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
+import { db } from '../../config/firebase';
 
 import {
+    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -31,27 +33,35 @@ export default function OrientacoesScreen() {
 
     async function carregarOrientacoes() {
         try {
-            const dadosSalvos =
-                await AsyncStorage.getItem('orientacoes');
+            const resultado = await getDocs(
+                collection(db, 'orientacoes')
+            );
 
-            if (dadosSalvos) {
-                const lista: Orientacao[] =
-                    JSON.parse(dadosSalvos);
+            const lista: Orientacao[] = resultado.docs.map(
+                (documento) => ({
+                    id: documento.id,
+                    ...(documento.data() as Omit<Orientacao, 'id'>),
+                })
+            );
 
-                setOrientacoes(lista);
-            } else {
-                setOrientacoes([]);
-            }
+            setOrientacoes(lista);
+
+            console.log(
+                'ORIENTAÇÕES DO FIREBASE:',
+                lista.length
+            );
         } catch (erro) {
             console.log(
                 'Erro ao carregar orientações:',
                 erro
             );
 
-            setOrientacoes([]);
+            Alert.alert(
+                'Erro',
+                'Não foi possível carregar as orientações.'
+            );
         }
     }
-
     useFocusEffect(
         useCallback(() => {
             carregarOrientacoes();
@@ -325,63 +335,37 @@ export default function OrientacoesScreen() {
                         <Text style={styles.tituloSecao}>
                             Destaques
                         </Text>
-
-                        <Pressable
-                            style={styles.cardDestaque}
-                            onPress={() => abrirOrientacao('4')}
-                        >
-                            <View style={styles.imagemDestaque}>
-                                <Text style={styles.emojiDestaque}>
-                                    👩‍👧
-                                </Text>
-                            </View>
-
-                            <View style={styles.textoDestaque}>
-                                <Text style={styles.tituloDestaque}>
-                                    Entendendo a comunicação
-                                </Text>
-
-                                <Text style={styles.descricaoDestaque}>
-                                    Informações para apoiar a comunicação
-                                    respeitando o ritmo da criança.
-                                </Text>
-
-                                <Text style={styles.lerMais}>
-                                    Ler orientação ›
-                                </Text>
-                            </View>
-                        </Pressable>
-
-                        <Pressable
-                            style={styles.cardDestaque}
-                            onPress={() => abrirOrientacao('7')}
-                        >
-                            <View
-                                style={[
-                                    styles.imagemDestaque,
-                                    styles.imagemRosa,
-                                ]}
+                        {orientacoes.map((item) => (
+                            <Pressable
+                                key={item.id}
+                                style={styles.cardDestaque}
+                                onPress={() => abrirOrientacao(item.id)}
                             >
-                                <Text style={styles.emojiDestaque}>
-                                    🌈
-                                </Text>
-                            </View>
+                                <View style={styles.imagemDestaque}>
+                                    <Text style={styles.emojiDestaque}>
+                                        {item.icone}
+                                    </Text>
+                                </View>
 
-                            <View style={styles.textoDestaque}>
-                                <Text style={styles.tituloDestaque}>
-                                    A importância da rotina
-                                </Text>
+                                <View style={styles.textoDestaque}>
+                                    <Text style={styles.tituloDestaque}>
+                                        {item.titulo}
+                                    </Text>
 
-                                <Text style={styles.descricaoDestaque}>
-                                    Veja como uma rotina organizada pode ajudar
-                                    no dia a dia.
-                                </Text>
+                                    <Text
+                                        style={styles.descricaoDestaque}
+                                        numberOfLines={2}
+                                    >
+                                        {item.introducao ||
+                                            'Toque para visualizar esta orientação.'}
+                                    </Text>
 
-                                <Text style={styles.lerMais}>
-                                    Ler orientação ›
-                                </Text>
-                            </View>
-                        </Pressable>
+                                    <Text style={styles.lerMais}>
+                                        Ler orientação ›
+                                    </Text>
+                                </View>
+                            </Pressable>
+                        ))}
 
                         {/* Decoração */}
                         <View style={styles.decoracao}>

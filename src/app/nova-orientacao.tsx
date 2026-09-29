@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { addDoc, collection } from 'firebase/firestore';
 import { useState } from 'react';
 import {
     Alert,
@@ -13,6 +13,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { db } from '../../config/firebase';
 
 type Orientacao = {
     id: string;
@@ -73,7 +74,6 @@ export default function NovaOrientacaoScreen() {
                 'Campos obrigatórios',
                 'Preencha o título, a categoria, a introdução, pelo menos uma dica e o lembrete.'
             );
-
             return;
         }
 
@@ -85,37 +85,15 @@ export default function NovaOrientacaoScreen() {
                 dica4.trim(),
             ].filter((dica) => dica.length > 0);
 
-            const novaOrientacao: Orientacao = {
-                id: Date.now().toString(),
+            await addDoc(collection(db, 'orientacoes'), {
                 titulo: titulo.trim(),
                 categoria,
                 icone: pegarIconeCategoria(),
                 introducao: introducao.trim(),
                 dicas,
                 lembrete: lembrete.trim(),
-            };
-
-            const dadosSalvos =
-                await AsyncStorage.getItem('orientacoes');
-
-            const orientacoesAtuais: Orientacao[] =
-                dadosSalvos ? JSON.parse(dadosSalvos) : [];
-
-            const novaLista = [
-                ...orientacoesAtuais,
-                novaOrientacao,
-            ];
-
-            await AsyncStorage.setItem(
-                'orientacoes',
-                JSON.stringify(novaLista)
-            );
-            const teste = await AsyncStorage.getItem('orientacoes');
-
-            console.log('=== TESTE ORIENTAÇÕES ===');
-            console.log(teste);
-            console.log('QUANTIDADE:', novaLista.length);
-
+                criadoEm: new Date(),
+            });
 
             Alert.alert(
                 'Orientação salva! 💙',

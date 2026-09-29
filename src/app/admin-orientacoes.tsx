@@ -1,5 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
+import {
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+} from 'firebase/firestore';
+
 import { useCallback, useState } from 'react';
 import {
     Alert,
@@ -10,6 +16,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { db } from '../../config/firebase';
 
 type Orientacao = {
     id: string;
@@ -102,80 +109,23 @@ export default function AdminOrientacoesScreen() {
     // Carrega as orientações salvas
     async function carregarOrientacoes() {
         try {
-            const dadosSalvos = await AsyncStorage.getItem('orientacoes');
-            const migracaoFeita = await AsyncStorage.getItem(
-                'orientacoes_iniciais_v1'
+            const resultado = await getDocs(
+                collection(db, 'orientacoes')
             );
 
-            // Já existem orientações salvas
-            if (dadosSalvos !== null) {
-                const listaSalva: Orientacao[] = JSON.parse(dadosSalvos);
-
-                // Faz isso UMA ÚNICA VEZ:
-                // junta as 12 iniciais com as que você já cadastrou
-                if (migracaoFeita !== 'sim') {
-                    const idsSalvos = new Set(
-                        listaSalva.map((item) => item.id)
-                    );
-
-                    const iniciaisQueFaltam = orientacoesIniciais.filter(
-                        (item) => !idsSalvos.has(item.id)
-                    );
-
-                    const listaCompleta = [
-                        ...orientacoesIniciais,
-                        ...listaSalva.filter(
-                            (item) =>
-                                !orientacoesIniciais.some(
-                                    (inicial) => inicial.id === item.id
-                                )
-                        ),
-                    ];
-
-                    await AsyncStorage.setItem(
-                        'orientacoes',
-                        JSON.stringify(listaCompleta)
-                    );
-
-                    await AsyncStorage.setItem(
-                        'orientacoes_iniciais_v1',
-                        'sim'
-                    );
-
-                    setOrientacoes(listaCompleta);
-
-                    console.log(
-                        'Migração concluída. Quantidade:',
-                        listaCompleta.length
-                    );
-
-                    return;
-                }
-
-                // Depois da migração, apenas lê o que está salvo.
-                // Isso permite excluir itens sem eles reaparecerem.
-                setOrientacoes(listaSalva);
-
-                console.log(
-                    'ORIENTAÇÕES CARREGADAS:',
-                    listaSalva.length
-                );
-
-                return;
-            }
-
-            // Caso não exista absolutamente nada salvo
-            await AsyncStorage.setItem(
-                'orientacoes',
-                JSON.stringify(orientacoesIniciais)
+            const lista: Orientacao[] = resultado.docs.map(
+                (documento) => ({
+                    id: documento.id,
+                    ...(documento.data() as Omit<Orientacao, 'id'>),
+                })
             );
 
-            await AsyncStorage.setItem(
-                'orientacoes_iniciais_v1',
-                'sim'
-            );
+            setOrientacoes(lista);
 
-            setOrientacoes(orientacoesIniciais);
+            console.log(
+                'ORIENTAÇÕES ADMIN DO FIREBASE:',
+                lista.length
+            );
         } catch (erro) {
             console.log(
                 'Erro ao carregar orientações:',
@@ -244,23 +194,25 @@ export default function AdminOrientacoesScreen() {
 
     async function excluirOrientacao(id: string) {
         try {
-            const novaLista = orientacoes.filter(
-                (item) => item.id !== id
+            await deleteDoc(
+                doc(db, 'orientacoes', id)
             );
 
-            await AsyncStorage.setItem(
-                'orientacoes',
-                JSON.stringify(novaLista)
+            setOrientacoes((listaAtual) =>
+                listaAtual.filter(
+                    (item) => item.id !== id
+                )
             );
-
-            setOrientacoes(novaLista);
 
             Alert.alert(
                 'Orientação excluída',
                 'O conteúdo foi removido com sucesso.'
             );
         } catch (erro) {
-            console.log('Erro ao excluir orientação:', erro);
+            console.log(
+                'Erro ao excluir orientação:',
+                erro
+            );
 
             Alert.alert(
                 'Erro',
@@ -268,7 +220,6 @@ export default function AdminOrientacoesScreen() {
             );
         }
     }
-
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView

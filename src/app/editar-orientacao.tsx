@@ -1,4 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+    doc,
+    getDoc,
+    updateDoc,
+} from 'firebase/firestore';
+
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -13,6 +18,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { db } from '../../config/firebase';
 
 type Orientacao = {
     id: string;
@@ -80,27 +86,15 @@ export default function EditarOrientacaoScreen() {
                 return;
             }
 
-            const dadosSalvos =
-                await AsyncStorage.getItem('orientacoes');
-
-            if (!dadosSalvos) {
-                Alert.alert(
-                    'Erro',
-                    'Nenhuma orientação foi encontrada.'
-                );
-
-                router.back();
-                return;
-            }
-
-            const lista: Orientacao[] =
-                JSON.parse(dadosSalvos);
-
-            const orientacao = lista.find(
-                (item) => item.id === id
+            const referencia = doc(
+                db,
+                'orientacoes',
+                id
             );
 
-            if (!orientacao) {
+            const documento = await getDoc(referencia);
+
+            if (!documento.exists()) {
                 Alert.alert(
                     'Erro',
                     'A orientação não foi encontrada.'
@@ -109,6 +103,11 @@ export default function EditarOrientacaoScreen() {
                 router.back();
                 return;
             }
+
+            const orientacao = {
+                id: documento.id,
+                ...documento.data(),
+            } as Orientacao;
 
             setTitulo(orientacao.titulo ?? '');
             setCategoria(orientacao.categoria ?? '');
@@ -120,6 +119,7 @@ export default function EditarOrientacaoScreen() {
             setDica4(orientacao.dicas?.[3] ?? '');
 
             setLembrete(orientacao.lembrete ?? '');
+
         } catch (erro) {
             console.log(
                 'Erro ao carregar orientação:',
@@ -134,7 +134,6 @@ export default function EditarOrientacaoScreen() {
             setCarregando(false);
         }
     }
-
     function pegarIconeCategoria() {
         const categoriaSelecionada =
             categorias.find(
@@ -150,7 +149,6 @@ export default function EditarOrientacaoScreen() {
                 'Campo obrigatório',
                 'Digite o título da orientação.'
             );
-
             return;
         }
 
@@ -159,26 +157,18 @@ export default function EditarOrientacaoScreen() {
                 'Campo obrigatório',
                 'Selecione uma categoria.'
             );
+            return;
+        }
 
+        if (!id) {
+            Alert.alert(
+                'Erro',
+                'Não foi possível identificar a orientação.'
+            );
             return;
         }
 
         try {
-            const dadosSalvos =
-                await AsyncStorage.getItem('orientacoes');
-
-            if (!dadosSalvos) {
-                Alert.alert(
-                    'Erro',
-                    'Não foi possível encontrar as orientações.'
-                );
-
-                return;
-            }
-
-            const lista: Orientacao[] =
-                JSON.parse(dadosSalvos);
-
             const dicas = [
                 dica1.trim(),
                 dica2.trim(),
@@ -186,25 +176,17 @@ export default function EditarOrientacaoScreen() {
                 dica4.trim(),
             ].filter((dica) => dica.length > 0);
 
-            const novaLista = lista.map((item) => {
-                if (item.id !== id) {
-                    return item;
-                }
-
-                return {
-                    ...item,
+            await updateDoc(
+                doc(db, 'orientacoes', id),
+                {
                     titulo: titulo.trim(),
                     categoria,
                     icone: pegarIconeCategoria(),
                     introducao: introducao.trim(),
                     dicas,
                     lembrete: lembrete.trim(),
-                };
-            });
-
-            await AsyncStorage.setItem(
-                'orientacoes',
-                JSON.stringify(novaLista)
+                    atualizadoEm: new Date(),
+                }
             );
 
             Alert.alert(
@@ -218,6 +200,7 @@ export default function EditarOrientacaoScreen() {
                     },
                 ]
             );
+
         } catch (erro) {
             console.log(
                 'Erro ao editar orientação:',
@@ -230,7 +213,6 @@ export default function EditarOrientacaoScreen() {
             );
         }
     }
-
     if (carregando) {
         return (
             <SafeAreaView style={styles.container}>

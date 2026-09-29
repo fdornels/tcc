@@ -164,7 +164,7 @@ export default function EsqueciSenhaScreen() {
                         keyboardType="email-address"
                         autoCapitalize="none"
                         autoCorrect={false}
-                        onSubmitEditing={recuperarSenha}
+
                     />
 
                     <Pressable

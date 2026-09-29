@@ -1,5 +1,8 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+
 import { signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { useCallback, useState } from 'react';
 import {
     Alert,
     Pressable,
@@ -9,10 +12,45 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { auth } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 
 export default function ConfiguracoesScreen() {
     const usuario = auth.currentUser;
+
+    const [ehAdmin, setEhAdmin] = useState(false);
+
+    async function verificarAdmin() {
+        try {
+            const usuarioAtual = auth.currentUser;
+
+            if (!usuarioAtual) {
+                setEhAdmin(false);
+                return;
+            }
+
+            const documento = await getDoc(
+                doc(db, 'usuarios', usuarioAtual.uid)
+            );
+
+            setEhAdmin(
+                documento.exists() &&
+                documento.data().admin === true
+            );
+        } catch (erro) {
+            console.log(
+                'Erro ao verificar admin:',
+                erro
+            );
+
+            setEhAdmin(false);
+        }
+    }
+
+    useFocusEffect(
+        useCallback(() => {
+            verificarAdmin();
+        }, [])
+    );
 
     async function sairDaConta() {
         Alert.alert(
@@ -153,7 +191,45 @@ export default function ConfiguracoesScreen() {
                     </View>
                 </View>
             </View>
+            {ehAdmin && (
+                <>
+                    <Text style={styles.tituloSecao}>
+                        Administração
+                    </Text>
 
+                    <View style={styles.card}>
+                        <Pressable
+                            style={styles.item}
+                            onPress={() => router.push('/admin')}
+                        >
+                            <View style={styles.iconeAzul}>
+                                <Text style={styles.emoji}>
+                                    ⚙️
+                                </Text>
+                            </View>
+
+                            <View style={styles.textoItem}>
+                                <Text style={styles.tituloItem}>
+                                    Painel administrativo
+                                </Text>
+
+                                <Text style={styles.descricaoItem}>
+                                    Gerencie os conteúdos do TEAjudo
+                                </Text>
+                            </View>
+
+                            <Text
+                                style={{
+                                    color: '#8A969B',
+                                    fontSize: 24,
+                                }}
+                            >
+                                ›
+                            </Text>
+                        </Pressable>
+                    </View>
+                </>
+            )}
             {/* LOGOUT */}
             <Pressable
                 style={styles.botaoSair}
