@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import { router, useFocusEffect } from 'expo-router';
 import {
     collection,
@@ -8,14 +9,14 @@ import {
 import { useCallback, useState } from 'react';
 import {
     Pressable,
+    Image,
     ScrollView,
     StyleSheet,
     Text,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../config/firebase';
-
 type Compromisso = {
     id: string;
     titulo: string;
@@ -24,6 +25,7 @@ type Compromisso = {
 };
 
 export default function HomeScreen() {
+    const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
     const nomeUsuario =
         auth.currentUser?.displayName || 'Usuária';
 
@@ -33,7 +35,30 @@ export default function HomeScreen() {
 
     const [proximoCompromisso, setProximoCompromisso] =
         useState<Compromisso | null>(null);
+    async function carregarFotoPerfil() {
+        const usuarioAtual = auth.currentUser;
 
+        if (!usuarioAtual) {
+            setFotoPerfil(null);
+            return;
+        }
+
+        const fotoSalva =
+            `${FileSystem.documentDirectory}perfil/${usuarioAtual.uid}.jpg`;
+
+        const infoFoto = await FileSystem.getInfoAsync(fotoSalva);
+
+        if (infoFoto.exists) {
+            setFotoPerfil(fotoSalva);
+        } else {
+            setFotoPerfil(null);
+        }
+    }
+    useFocusEffect(
+        useCallback(() => {
+            carregarFotoPerfil();
+        }, [])
+    );
     async function verificarAdmin() {
         try {
             const usuario = auth.currentUser;
@@ -162,7 +187,14 @@ export default function HomeScreen() {
                 {/* Boas-vindas */}
                 <View style={styles.boasVindas}>
                     <View style={styles.avatar}>
-                        <Text style={styles.avatarEmoji}>👩🏻</Text>
+                        {fotoPerfil ? (
+                            <Image
+                                source={{ uri: fotoPerfil }}
+                                style={styles.fotoPerfil}
+                            />
+                        ) : (
+                            <Text style={styles.avatarEmoji}>👤</Text>
+                        )}
                     </View>
 
                     <View style={styles.boasVindasTexto}>
@@ -240,7 +272,7 @@ export default function HomeScreen() {
                         style={[styles.card, styles.cardRosa]}
                         onPress={() => router.push('/minha-crianca')}
                     >
-                        <Text style={styles.icone}>👧🏻</Text>
+                        <Text style={styles.icone}>👶</Text>
                         <Text style={styles.cardTitulo}>Minha Criança</Text>
                         <Text style={styles.cardDescricao}>
                             Gerencie as informações
@@ -531,5 +563,10 @@ const styles = StyleSheet.create({
         fontSize: 9,
         fontWeight: '700',
         marginTop: 4,
+    },
+    fotoPerfil: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 50,
     },
 });

@@ -115,7 +115,40 @@ export default function NovoCompromissoScreen() {
 
         return `${numeros.slice(0, 2)}/${numeros.slice(2, 4)}/${numeros.slice(4)}`;
     }
+    function dataValida(valor: string) {
+        const partes = valor.split('/');
 
+        if (partes.length !== 3) {
+            return false;
+        }
+
+        const dia = Number(partes[0]);
+        const mes = Number(partes[1]);
+        const ano = Number(partes[2]);
+
+        const anoAtual = new Date().getFullYear();
+
+        if (
+            dia < 1 ||
+            mes < 1 ||
+            mes > 12 ||
+            ano < anoAtual
+        ) {
+            return false;
+        }
+
+        const dataCriada = new Date(
+            ano,
+            mes - 1,
+            dia
+        );
+
+        return (
+            dataCriada.getFullYear() === ano &&
+            dataCriada.getMonth() === mes - 1 &&
+            dataCriada.getDate() === dia
+        );
+    }
     function formatarHorario(texto: string) {
         const numeros = texto.replace(/\D/g, '').slice(0, 4);
 
@@ -125,6 +158,31 @@ export default function NovoCompromissoScreen() {
 
         return `${numeros.slice(0, 2)}:${numeros.slice(2)}`;
     }
+
+    function horarioValido(valor: string) {
+        const partes = valor.split(':');
+
+        if (partes.length !== 2) {
+            return false;
+        }
+
+        const hora = Number(partes[0]);
+        const minuto = Number(partes[1]);
+
+        if (
+            partes[0].length !== 2 ||
+            partes[1].length !== 2
+        ) {
+            return false;
+        }
+
+        return (
+            hora >= 0 &&
+            hora <= 23 &&
+            minuto >= 0 &&
+            minuto <= 59
+        );
+    }
     async function salvarCompromisso() {
         if (!titulo.trim() || !data.trim() || !horario.trim()) {
             Alert.alert(
@@ -133,7 +191,20 @@ export default function NovoCompromissoScreen() {
             );
             return;
         }
-
+        if (!dataValida(data)) {
+            Alert.alert(
+                'Data inválida',
+                'Verifique o dia, o mês e o ano informados.'
+            );
+            return;
+        }
+        if (!horarioValido(horario)) {
+            Alert.alert(
+                'Horário inválido',
+                'Digite um horário válido entre 00:00 e 23:59.'
+            );
+            return;
+        }
         try {
             const usuario = auth.currentUser;
 

@@ -63,7 +63,15 @@ const categorias = [
 
 export default function AtividadesScreen() {
     const [atividades, setAtividades] = useState<Atividade[]>([]);
+    const [categoriaSelecionada, setCategoriaSelecionada] =
+        useState<string | null>(null);
 
+    const atividadesFiltradas = categoriaSelecionada
+        ? atividades.filter(
+            (atividade) =>
+                atividade.categoria === categoriaSelecionada
+        )
+        : atividades;
     /*
      * Toda vez que a tela Atividades recebe foco,
      * buscamos novamente os dados no AsyncStorage.
@@ -267,85 +275,125 @@ export default function AtividadesScreen() {
                 <Text style={styles.tituloSecao}>
                     Categorias
                 </Text>
-
                 <View style={styles.grade}>
-                    <View
+                    <Pressable
                         style={[
                             styles.cardCategoria,
                             styles.azul,
                         ]}
+                        onPress={() =>
+                            setCategoriaSelecionada(
+                                categoriaSelecionada === 'Comunicação'
+                                    ? null
+                                    : 'Comunicação'
+                            )
+                        }
                     >
                         <Text style={styles.emoji}>💬</Text>
 
                         <Text style={styles.nomeCategoria}>
                             Comunicação
                         </Text>
-                    </View>
-
-                    <View
+                    </Pressable>
+                    <Pressable
                         style={[
                             styles.cardCategoria,
                             styles.verde,
                         ]}
+                        onPress={() =>
+                            setCategoriaSelecionada(
+                                categoriaSelecionada === 'Alimentação'
+                                    ? null
+                                    : 'Alimentação'
+                            )
+                        }
                     >
                         <Text style={styles.emoji}>🍎</Text>
 
                         <Text style={styles.nomeCategoria}>
                             Alimentação
                         </Text>
-                    </View>
+                    </Pressable>
 
-                    <View
+                    <Pressable
                         style={[
                             styles.cardCategoria,
                             styles.amarelo,
                         ]}
+                        onPress={() =>
+                            setCategoriaSelecionada(
+                                categoriaSelecionada === 'Escola'
+                                    ? null
+                                    : 'Escola'
+                            )
+                        }
                     >
                         <Text style={styles.emoji}>🎒</Text>
 
                         <Text style={styles.nomeCategoria}>
                             Escola
                         </Text>
-                    </View>
+                    </Pressable>
 
-                    <View
+                    <Pressable
                         style={[
                             styles.cardCategoria,
                             styles.roxo,
                         ]}
+                        onPress={() =>
+                            setCategoriaSelecionada(
+                                categoriaSelecionada === 'Sensorial'
+                                    ? null
+                                    : 'Sensorial'
+                            )
+                        }
                     >
                         <Text style={styles.emoji}>🧩</Text>
 
                         <Text style={styles.nomeCategoria}>
                             Sensorial
                         </Text>
-                    </View>
+                    </Pressable>
 
-                    <View
+                    <Pressable
                         style={[
                             styles.cardCategoria,
                             styles.rosa,
                         ]}
+                        onPress={() =>
+                            setCategoriaSelecionada(
+                                categoriaSelecionada === 'Rotina'
+                                    ? null
+                                    : 'Rotina'
+                            )
+                        }
                     >
                         <Text style={styles.emoji}>🌈</Text>
 
                         <Text style={styles.nomeCategoria}>
                             Rotina
                         </Text>
-                    </View>
+                    </Pressable>
 
-                    <View
+                    <Pressable
                         style={[
                             styles.cardCategoria,
                             styles.azulClaro,
                         ]}
+                        onPress={() =>
+                            setCategoriaSelecionada(
+                                categoriaSelecionada === 'Outros'
+                                    ? null
+                                    : 'Outros'
+                            )
+                        }
                     >
                         <Text style={styles.emoji}>⭐</Text>
 
                         <Text style={styles.nomeCategoria}>
                             Outros
                         </Text>
-                    </View>
+                    </Pressable>
                 </View>
 
                 {/* Atividades recentes */}
@@ -382,7 +430,7 @@ export default function AtividadesScreen() {
                 ) : (
                     /* Lista das atividades */
                     <View style={styles.listaAtividades}>
-                        {atividades.map((item) => (
+                        {atividadesFiltradas.map((item) => (
                             <View
                                 key={item.id}
                                 style={styles.cardAtividade}
@@ -514,7 +562,7 @@ export default function AtividadesScreen() {
                     </Text>
                 </Pressable>
             </View>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -594,7 +642,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
-        marginBottom: 20,
+        gap: 10,
     },
 
     cardCategoria: {

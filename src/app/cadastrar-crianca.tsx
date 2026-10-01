@@ -21,6 +21,7 @@ type Crianca = {
     nome: string;
     apelido: string;
     dataNascimento: string;
+    sexo: 'Menina' | 'Menino' | 'Prefiro não identificar';
     escola: string;
     comunicacao: string;
     preferencias: string;
@@ -32,6 +33,9 @@ export default function CadastrarCriancaScreen() {
     const [nome, setNome] = useState('');
     const [apelido, setApelido] = useState('');
     const [dataNascimento, setDataNascimento] = useState('');
+    const [sexo, setSexo] = useState<
+        'Menina' | 'Menino' | 'Prefiro não identificar'
+    >('Prefiro não identificar');
     const [escola, setEscola] = useState('');
     const [comunicacao, setComunicacao] = useState('');
     const [preferencias, setPreferencias] = useState('');
@@ -84,6 +88,7 @@ export default function CadastrarCriancaScreen() {
             nome: nome.trim(),
             apelido: apelido.trim(),
             dataNascimento: dataNascimento.trim(),
+            sexo,
             escola: escola.trim(),
             comunicacao: comunicacao.trim(),
             preferencias: preferencias.trim(),
@@ -228,6 +233,47 @@ export default function CadastrarCriancaScreen() {
                             keyboardType="number-pad"
                             maxLength={10}
                         />
+                        <Text style={styles.label}>
+                            Identificação
+                        </Text>
+
+                        <View style={styles.opcoesSexo}>
+                            <Pressable
+                                style={[
+                                    styles.opcaoSexo,
+                                    sexo === 'Menina' && styles.opcaoSexoSelecionada,
+                                ]}
+                                onPress={() => setSexo('Menina')}
+                            >
+                                <Text style={styles.emojiSexo}>👧</Text>
+                                <Text style={styles.textoSexo}>Menina</Text>
+                            </Pressable>
+
+                            <Pressable
+                                style={[
+                                    styles.opcaoSexo,
+                                    sexo === 'Menino' && styles.opcaoSexoSelecionada,
+                                ]}
+                                onPress={() => setSexo('Menino')}
+                            >
+                                <Text style={styles.emojiSexo}>👦</Text>
+                                <Text style={styles.textoSexo}>Menino</Text>
+                            </Pressable>
+
+                            <Pressable
+                                style={[
+                                    styles.opcaoSexo,
+                                    sexo === 'Prefiro não identificar' &&
+                                    styles.opcaoSexoSelecionada,
+                                ]}
+                                onPress={() => setSexo('Prefiro não identificar')}
+                            >
+                                <Text style={styles.emojiSexo}>👶</Text>
+                                <Text style={styles.textoSexo}>
+                                    Prefiro não identificar
+                                </Text>
+                            </Pressable>
+                        </View>
 
                         <Text style={styles.label}>Escola</Text>
 
@@ -602,5 +648,41 @@ const styles = StyleSheet.create({
     coracao: {
         color: '#FF8FB1',
         fontSize: 30,
+    },
+    opcoesSexo: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 15,
+    },
+
+    opcaoSexo: {
+        flex: 1,
+        minHeight: 72,
+        borderRadius: 14,
+        backgroundColor: '#F7FAFB',
+        borderWidth: 1,
+        borderColor: '#D7E7EC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 5,
+        paddingVertical: 8,
+    },
+
+    opcaoSexoSelecionada: {
+        backgroundColor: '#E8F7FB',
+        borderColor: '#4288AF',
+        borderWidth: 2,
+    },
+
+    emojiSexo: {
+        fontSize: 24,
+        marginBottom: 4,
+    },
+
+    textoSexo: {
+        color: '#4D5A60',
+        fontSize: 9,
+        fontWeight: '600',
+        textAlign: 'center',
     },
 });

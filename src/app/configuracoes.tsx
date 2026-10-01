@@ -1,10 +1,12 @@
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
-
 import { signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
 import {
     Alert,
+    Image,
     Pressable,
     StyleSheet,
     Text,
@@ -13,10 +15,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { auth, db } from '../../config/firebase';
-
 export default function ConfiguracoesScreen() {
     const usuario = auth.currentUser;
-
+    const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
     const [ehAdmin, setEhAdmin] = useState(false);
 
     async function verificarAdmin() {
@@ -46,12 +47,105 @@ export default function ConfiguracoesScreen() {
         }
     }
 
+    async function carregarFotoPerfil() {
+        const usuarioAtual = auth.currentUser;
+
+        if (!usuarioAtual) {
+            setFotoPerfil(null);
+            return;
+        }
+
+        const fotoSalva =
+            `${FileSystem.documentDirectory}perfil/${usuarioAtual.uid}.jpg`;
+
+        const infoFoto = await FileSystem.getInfoAsync(fotoSalva);
+
+        if (infoFoto.exists) {
+            setFotoPerfil(`${fotoSalva}?t=${Date.now()}`);
+        } else {
+            setFotoPerfil(null);
+        }
+    }
     useFocusEffect(
         useCallback(() => {
             verificarAdmin();
+            carregarFotoPerfil();
         }, [])
     );
+    async function escolherFotoPerfil() {
+        const permissao =
+            await ImagePicker.requestMediaLibraryPermissionsAsync();
 
+        if (!permissao.granted) {
+            Alert.alert(
+                'Permissão necessária',
+                'Permita o acesso às fotos para escolher uma imagem de perfil.'
+            );
+            return;
+        }
+
+        const resultado = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!resultado.canceled) {
+            try {
+                const usuarioAtual = auth.currentUser;
+
+                if (!usuarioAtual) {
+                    Alert.alert(
+                        'Erro',
+                        'Você precisa estar conectada para alterar a foto.'
+                    );
+                    return;
+                }
+
+                const uri = resultado.assets[0].uri;
+
+                const pastaFotos = `${FileSystem.documentDirectory}perfil/`;
+                const fotoSalva = `${pastaFotos}${usuarioAtual.uid}.jpg`;
+
+                const infoPasta = await FileSystem.getInfoAsync(pastaFotos);
+
+                if (!infoPasta.exists) {
+                    await FileSystem.makeDirectoryAsync(pastaFotos, {
+                        intermediates: true,
+                    });
+                }
+
+                const fotoAntiga = await FileSystem.getInfoAsync(fotoSalva);
+
+                if (fotoAntiga.exists) {
+                    await FileSystem.deleteAsync(fotoSalva, {
+                        idempotent: true,
+                    });
+                }
+
+
+                await FileSystem.copyAsync({
+                    from: uri,
+                    to: fotoSalva,
+                });
+
+                setFotoPerfil(`${fotoSalva}?t=${Date.now()}`);
+
+                Alert.alert(
+                    'Foto atualizada! 💙',
+                    'Sua foto de perfil foi salva com sucesso.'
+                );
+            } catch (erro) {
+                console.log('Erro ao salvar foto:', erro);
+
+                Alert.alert(
+                    'Erro',
+                    'Não foi possível salvar sua foto de perfil.'
+                );
+            }
+        }
+    }
     async function sairDaConta() {
         Alert.alert(
             'Sair da conta',
@@ -106,29 +200,37 @@ export default function ConfiguracoesScreen() {
 
             {/* PERFIL */}
             <View style={styles.perfil}>
-                <View style={styles.avatar}>
-                    <Text style={styles.avatarEmoji}>
-                        👩🏻
-                    </Text>
-                </View>
+                <Pressable
+                    style={styles.avatar}
+                    onPress={escolherFotoPerfil}
+                >
+                    {fotoPerfil ? (
+                        <Image
+                            source={{ uri: fotoPerfil }}
+                            style={styles.fotoPerfil}
+                        />
+                    ) : (
+                        <Text style={styles.avatarEmoji}>👤</Text>
+                    )}
+                </Pressable>
 
                 <Text style={styles.nome}>
-                    {usuario?.displayName ||
-                        'Responsável'}
+                    {usuario?.displayName || 'Responsável'}
                 </Text>
 
                 <Text style={styles.email}>
-                    {usuario?.email ||
-                        'E-mail não disponível'}
+                    {usuario?.email || 'E-mail não disponível'}
                 </Text>
             </View>
-
             <Text style={styles.tituloSecao}>
                 Minha conta
             </Text>
 
             <View style={styles.card}>
-                <View style={styles.item}>
+                <Pressable
+                    style={styles.item}
+                    onPress={() => router.push('/dados-conta')}
+                >
                     <View style={styles.iconeAzul}>
                         <Text style={styles.emoji}>
                             👤
@@ -145,11 +247,14 @@ export default function ConfiguracoesScreen() {
                             TEAjudo
                         </Text>
                     </View>
-                </View>
+                </Pressable>
 
-                <View style={styles.divisor} />
+                <View style={styles.divisor} /><View style={styles.divisor} />
 
-                <View style={styles.item}>
+                <Pressable
+                    style={styles.item}
+                    onPress={() => router.push('/seguranca')}
+                >
                     <View style={styles.iconeAmarelo}>
                         <Text style={styles.emoji}>
                             🔒
@@ -165,7 +270,7 @@ export default function ConfiguracoesScreen() {
                             Senha e acesso à sua conta
                         </Text>
                     </View>
-                </View>
+                </Pressable>
             </View>
 
             <Text style={styles.tituloSecao}>
@@ -173,7 +278,11 @@ export default function ConfiguracoesScreen() {
             </Text>
 
             <View style={styles.card}>
-                <View style={styles.item}>
+
+                <Pressable
+                    style={styles.item}
+                    onPress={() => router.push('/sobre')}
+                >
                     <View style={styles.iconeVerde}>
                         <Text style={styles.emoji}>
                             💙
@@ -189,47 +298,49 @@ export default function ConfiguracoesScreen() {
                             Apoio à maternidade atípica
                         </Text>
                     </View>
-                </View>
+                </Pressable>
             </View>
-            {ehAdmin && (
-                <>
-                    <Text style={styles.tituloSecao}>
-                        Administração
-                    </Text>
+            {
+                ehAdmin && (
+                    <>
+                        <Text style={styles.tituloSecao}>
+                            Administração
+                        </Text>
 
-                    <View style={styles.card}>
-                        <Pressable
-                            style={styles.item}
-                            onPress={() => router.push('/admin')}
-                        >
-                            <View style={styles.iconeAzul}>
-                                <Text style={styles.emoji}>
-                                    ⚙️
-                                </Text>
-                            </View>
-
-                            <View style={styles.textoItem}>
-                                <Text style={styles.tituloItem}>
-                                    Painel administrativo
-                                </Text>
-
-                                <Text style={styles.descricaoItem}>
-                                    Gerencie os conteúdos do TEAjudo
-                                </Text>
-                            </View>
-
-                            <Text
-                                style={{
-                                    color: '#8A969B',
-                                    fontSize: 24,
-                                }}
+                        <View style={styles.card}>
+                            <Pressable
+                                style={styles.item}
+                                onPress={() => router.push('/admin')}
                             >
-                                ›
-                            </Text>
-                        </Pressable>
-                    </View>
-                </>
-            )}
+                                <View style={styles.iconeAzul}>
+                                    <Text style={styles.emoji}>
+                                        ⚙️
+                                    </Text>
+                                </View>
+
+                                <View style={styles.textoItem}>
+                                    <Text style={styles.tituloItem}>
+                                        Painel administrativo
+                                    </Text>
+
+                                    <Text style={styles.descricaoItem}>
+                                        Gerencie os conteúdos do TEAjudo
+                                    </Text>
+                                </View>
+
+                                <Text
+                                    style={{
+                                        color: '#8A969B',
+                                        fontSize: 24,
+                                    }}
+                                >
+                                    ›
+                                </Text>
+                            </Pressable>
+                        </View>
+                    </>
+                )
+            }
             {/* LOGOUT */}
             <Pressable
                 style={styles.botaoSair}
@@ -261,7 +372,7 @@ export default function ConfiguracoesScreen() {
                     🧩
                 </Text>
             </View>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -324,7 +435,11 @@ const styles = StyleSheet.create({
     avatarEmoji: {
         fontSize: 43,
     },
-
+    fotoPerfil: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 38,
+    },
     nome: {
         color: '#435159',
         fontSize: 19,

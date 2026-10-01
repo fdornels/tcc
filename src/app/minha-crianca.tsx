@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import { router, useFocusEffect } from 'expo-router';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
@@ -5,11 +6,12 @@ import { auth, db } from '../../config/firebase';
 
 import {
     Alert,
+    Image,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
-    View,
+    View
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +20,7 @@ type Crianca = {
     nome: string;
     apelido: string;
     dataNascimento: string;
+    sexo?: 'Menina' | 'Menino' | 'Prefiro não identificar';
     escola: string;
     comunicacao: string;
     preferencias: string;
@@ -28,6 +31,7 @@ type Crianca = {
 export default function MinhaCriancaScreen() {
     const [crianca, setCrianca] = useState<Crianca | null>(null);
     const [carregando, setCarregando] = useState(true);
+    const [fotoCrianca, setFotoCrianca] = useState<string | null>(null);
 
     function voltar() {
         router.back();
@@ -39,6 +43,28 @@ export default function MinhaCriancaScreen() {
 
     function editarCrianca() {
         router.push('/editar-crianca');
+    }
+    async function carregarFotoCrianca() {
+        const usuarioAtual = auth.currentUser;
+
+
+        if (!usuarioAtual) {
+            setFotoCrianca(null);
+            return;
+        }
+
+        const fotoSalva =
+            `${FileSystem.documentDirectory}crianca/${usuarioAtual.uid}.jpg`;
+
+        const infoFoto = await FileSystem.getInfoAsync(fotoSalva);
+
+        if (infoFoto.exists) {
+            console.log('FOTO ENCONTRADA:', fotoSalva);
+            setFotoCrianca(fotoSalva);
+        } else {
+            console.log('FOTO NÃO ENCONTRADA:', fotoSalva);
+            setFotoCrianca(null);
+        }
     }
 
     function excluirCrianca() {
@@ -136,6 +162,7 @@ export default function MinhaCriancaScreen() {
     useFocusEffect(
         useCallback(() => {
             carregarCrianca();
+            carregarFotoCrianca();
         }, [])
     );
 
@@ -174,9 +201,15 @@ export default function MinhaCriancaScreen() {
                         {/* PERFIL */}
                         <View style={styles.perfil}>
                             <View style={styles.avatar}>
-                                <Text style={styles.avatarEmoji}>👧🏻</Text>
+                                {fotoCrianca ? (
+                                    <Image
+                                        source={{ uri: fotoCrianca }}
+                                        style={styles.fotoCrianca}
+                                    />
+                                ) : (
+                                    <Text style={styles.avatarEmoji}>👶</Text>
+                                )}
                             </View>
-
                             <Text style={styles.nomeCrianca}>
                                 {crianca.apelido || crianca.nome}
                             </Text>
@@ -203,7 +236,13 @@ export default function MinhaCriancaScreen() {
 
                         <View style={styles.cardInformacao}>
                             <LinhaInformacao
-                                icone="👧🏻"
+                                icone={
+                                    crianca.sexo === 'Menina'
+                                        ? '👧'
+                                        : crianca.sexo === 'Menino'
+                                            ? '👦'
+                                            : '👶'
+                                }
                                 titulo="Nome"
                                 valor={crianca.nome}
                             />
@@ -341,7 +380,14 @@ export default function MinhaCriancaScreen() {
                         {/* APRESENTAÇÃO */}
                         <View style={styles.apresentacao}>
                             <View style={styles.avatar}>
-                                <Text style={styles.avatarEmoji}>👧🏻</Text>
+                                {fotoCrianca ? (
+                                    <Image
+                                        source={{ uri: fotoCrianca }}
+                                        style={styles.fotoCrianca}
+                                    />
+                                ) : (
+                                    <Text style={styles.avatarEmoji}>👶</Text>
+                                )}
                             </View>
 
                             <Text style={styles.tituloApresentacao}>
@@ -393,7 +439,7 @@ export default function MinhaCriancaScreen() {
                                     styles.cardAzul,
                                 ]}
                             >
-                                <Text style={styles.emojiCard}>👧🏻</Text>
+                                <Text style={styles.emojiCard}>👶</Text>
 
                                 <Text style={styles.tituloCard}>
                                     Dados pessoais
@@ -464,7 +510,7 @@ export default function MinhaCriancaScreen() {
                     <Text style={styles.decoracaoEmoji}>🌈</Text>
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -610,6 +656,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 10,
+    },
+    fotoCrianca: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 50,
     },
 
     perfilAvatar: {

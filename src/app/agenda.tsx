@@ -71,6 +71,26 @@ const dias = [
 
 export default function AgendaScreen() {
     const [compromissos, setCompromissos] = useState<Compromisso[]>([]);
+    const hoje = new Date();
+
+    const [mesAtual, setMesAtual] = useState(hoje.getMonth());
+    const [anoAtual, setAnoAtual] = useState(hoje.getFullYear());
+    const [diaSelecionado, setDiaSelecionado] = useState(hoje.getDate());
+
+    const nomesMeses = [
+        'Janeiro',
+        'Fevereiro',
+        'Março',
+        'Abril',
+        'Maio',
+        'Junho',
+        'Julho',
+        'Agosto',
+        'Setembro',
+        'Outubro',
+        'Novembro',
+        'Dezembro',
+    ];
 
     // Busca os compromissos salvos no celular
     async function carregarCompromissos() {
@@ -233,7 +253,101 @@ export default function AgendaScreen() {
             ]
         );
     }
+    function mesAnterior() {
+        setDiaSelecionado(1);
+        if (mesAtual === 0) {
+            setMesAtual(11);
+            setAnoAtual(anoAtual - 1);
+        } else {
+            setMesAtual(mesAtual - 1);
+        }
+    }
 
+    function proximoMes() {
+        setDiaSelecionado(1);
+        if (mesAtual === 11) {
+            setMesAtual(0);
+            setAnoAtual(anoAtual + 1);
+        } else {
+            setMesAtual(mesAtual + 1);
+        }
+    }
+    function gerarDiasCalendario() {
+        const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
+        const quantidadeDias = new Date(
+            anoAtual,
+            mesAtual + 1,
+            0
+        ).getDate();
+
+        const diasCalendario: (number | null)[] = [];
+
+        // espaços vazios antes do dia 1
+        for (let i = 0; i < primeiroDia; i++) {
+            diasCalendario.push(null);
+        }
+
+        // dias do mês
+        for (let dia = 1; dia <= quantidadeDias; dia++) {
+            diasCalendario.push(dia);
+        }
+
+        return diasCalendario;
+    }
+
+    const diasDoMes = gerarDiasCalendario();
+    const compromissosDoDia = compromissos.filter((compromisso) => {
+        const compromissosFuturos = compromissos
+            .filter((compromisso) => {
+                const [dia, mes, ano] = compromisso.data
+                    .split('/')
+                    .map(Number);
+
+                const dataCompromisso = new Date(ano, mes - 1, dia);
+
+                const hoje = new Date();
+                hoje.setHours(0, 0, 0, 0);
+
+                return dataCompromisso >= hoje;
+            })
+            .sort((a, b) => {
+                const [diaA, mesA, anoA] = a.data.split('/').map(Number);
+                const [diaB, mesB, anoB] = b.data.split('/').map(Number);
+
+                const dataA = new Date(anoA, mesA - 1, diaA);
+                const dataB = new Date(anoB, mesB - 1, diaB);
+
+                return dataA.getTime() - dataB.getTime();
+            });
+        const dataSelecionada =
+            `${String(diaSelecionado).padStart(2, '0')}/` +
+            `${String(mesAtual + 1).padStart(2, '0')}/` +
+            `${anoAtual}`;
+
+        return compromisso.data === dataSelecionada;
+    });
+    const compromissosFuturos = compromissos
+        .filter((compromisso) => {
+            const [dia, mes, ano] = compromisso.data
+                .split('/')
+                .map(Number);
+
+            const dataCompromisso = new Date(ano, mes - 1, dia);
+
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            return dataCompromisso >= hoje;
+        })
+        .sort((a, b) => {
+            const [diaA, mesA, anoA] = a.data.split('/').map(Number);
+            const [diaB, mesB, anoB] = b.data.split('/').map(Number);
+
+            const dataA = new Date(anoA, mesA - 1, diaA);
+            const dataB = new Date(anoB, mesB - 1, diaB);
+
+            return dataA.getTime() - dataB.getTime();
+        });
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView
@@ -257,13 +371,17 @@ export default function AgendaScreen() {
                 {/* Calendário */}
                 <View style={styles.calendario}>
                     <View style={styles.mesArea}>
-                        <Text style={styles.setaMes}>‹</Text>
+                        <Pressable onPress={mesAnterior}>
+                            <Text style={styles.setaMes}>‹</Text>
+                        </Pressable>
 
                         <Text style={styles.mes}>
-                            Maio 2026
+                            {nomesMeses[mesAtual]} {anoAtual}
                         </Text>
 
-                        <Text style={styles.setaMes}>›</Text>
+                        <Pressable onPress={proximoMes}>
+                            <Text style={styles.setaMes}>›</Text>
+                        </Pressable>
                     </View>
 
                     {/* Dias da semana */}
@@ -282,34 +400,54 @@ export default function AgendaScreen() {
 
                     {/* Dias do calendário */}
                     <View style={styles.gradeCalendario}>
-                        {dias.map((dia, index) => (
-                            <View
-                                key={index}
-                                style={styles.diaContainer}
-                            >
-                                <View
-                                    style={[
-                                        styles.dia,
-                                        dia.selecionado &&
-                                        styles.diaSelecionado,
-                                    ]}
+                        {diasDoMes.map((dia, index) => {
+                            const dataDoDia =
+                                dia !== null
+                                    ? `${String(dia).padStart(2, '0')}/${String(
+                                        mesAtual + 1
+                                    ).padStart(2, '0')}/${anoAtual}`
+                                    : '';
+
+                            const temCompromisso = compromissos.some(
+                                (compromisso) => compromisso.data === dataDoDia
+                            );
+
+                            return (
+                                <Pressable
+                                    key={index}
+                                    style={styles.diaContainer}
+                                    disabled={dia === null}
+                                    onPress={() => {
+                                        if (dia !== null) {
+                                            setDiaSelecionado(dia);
+                                        }
+                                    }}
                                 >
-                                    <Text
+                                    <View
                                         style={[
-                                            styles.numeroDia,
-                                            dia.outroMes &&
-                                            styles.outroMes,
-                                            dia.selecionado &&
-                                            styles.numeroSelecionado,
+                                            styles.dia,
+                                            dia === diaSelecionado &&
+                                            styles.diaSelecionado,
                                         ]}
                                     >
-                                        {dia.numero}
-                                    </Text>
-                                </View>
-                            </View>
-                        ))}
-                    </View>
+                                        <Text
+                                            style={[
+                                                styles.numeroDia,
+                                                dia === diaSelecionado &&
+                                                styles.numeroSelecionado,
+                                            ]}
+                                        >
+                                            {dia ?? ''}
+                                        </Text>
 
+                                        {temCompromisso && (
+                                            <View style={styles.bolinhaCompromisso} />
+                                        )}
+                                    </View>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
                     <View style={styles.decoracaoCalendario}>
                         <Text>☁️</Text>
                         <Text style={styles.coracao}>♥</Text>
@@ -318,11 +456,11 @@ export default function AgendaScreen() {
 
                 {/* Título da lista */}
                 <Text style={styles.tituloSecao}>
-                    Próximos compromissos
+                    Compromissos do dia
                 </Text>
 
                 {/* Caso não exista nenhum compromisso */}
-                {compromissos.length === 0 ? (
+                {compromissosDoDia.length === 0 ? (
                     <View style={styles.semCompromissos}>
                         <Text style={styles.iconeVazio}>
                             🗓️
@@ -338,7 +476,7 @@ export default function AgendaScreen() {
                     </View>
                 ) : (
                     /* Lista dos compromissos cadastrados */
-                    compromissos.map((item) => (
+                    compromissosDoDia.map((item) => (
                         <View
                             key={item.id}
                             style={styles.compromisso}
@@ -373,6 +511,55 @@ export default function AgendaScreen() {
                                 <Text style={styles.mais}>
                                     •••
                                 </Text>
+                            </Pressable>
+                        </View>
+                    ))
+                )}
+
+                {/* TODOS OS PRÓXIMOS COMPROMISSOS */}
+                <Text style={styles.tituloSecao}>
+                    Próximos compromissos
+                </Text>
+
+                {compromissosFuturos.length === 0 ? (
+                    <View style={styles.semCompromissos}>
+                        <Text style={styles.textoVazio}>
+                            Nenhum compromisso futuro.
+                        </Text>
+                    </View>
+                ) : (
+                    compromissosFuturos.map((item) => (
+                        <View
+                            key={`futuro-${item.id}`}
+                            style={styles.compromisso}
+                        >
+                            <View style={styles.iconeCompromisso}>
+                                <Text style={styles.emojiCompromisso}>
+                                    {escolherIcone(item.tipo)}
+                                </Text>
+                            </View>
+
+                            <View style={styles.infoCompromisso}>
+                                <Text style={styles.nomeCompromisso}>
+                                    {item.titulo}
+                                </Text>
+
+                                <Text style={styles.dataCompromisso}>
+                                    {item.data} • {item.horario}
+                                </Text>
+
+                                {item.local ? (
+                                    <Text style={styles.localCompromisso}>
+                                        {item.local}
+                                    </Text>
+                                ) : null}
+                            </View>
+
+                            <Pressable
+                                style={styles.botaoMais}
+                                onPress={() => abrirOpcoes(item)}
+                            >
+                                <Text style={styles.mais}>•••</Text>
                             </Pressable>
                         </View>
                     ))
@@ -446,7 +633,7 @@ export default function AgendaScreen() {
                     </Text>
                 </Pressable>
             </View>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -739,5 +926,13 @@ const styles = StyleSheet.create({
         fontSize: 9,
         fontWeight: '700',
         marginTop: 4,
+    },
+    bolinhaCompromisso: {
+        width: 5,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: '#FF6B9A',
+        position: 'absolute',
+        bottom: 2,
     },
 });
