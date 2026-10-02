@@ -1,0 +1,940 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
+import {
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+} from 'firebase/firestore';
+import { useCallback, useState } from 'react';
+import {
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth, db } from '../../config/firebase';
+
+type Compromisso = {
+    id: string;
+    titulo: string;
+    tipo: string;
+    data: string;
+    horario: string;
+    local: string;
+    observacoes: string;
+};
+
+const dias = [
+    { numero: 27, outroMes: true },
+    { numero: 28, outroMes: true },
+    { numero: 29, outroMes: true },
+    { numero: 30, outroMes: true },
+    { numero: 1 },
+    { numero: 2 },
+    { numero: 3 },
+
+    { numero: 4 },
+    { numero: 5 },
+    { numero: 6 },
+    { numero: 7 },
+    { numero: 8 },
+    { numero: 9 },
+    { numero: 10 },
+
+    { numero: 11 },
+    { numero: 12 },
+    { numero: 13, selecionado: true },
+    { numero: 14 },
+    { numero: 15 },
+    { numero: 16 },
+    { numero: 17 },
+
+    { numero: 18 },
+    { numero: 19 },
+    { numero: 20 },
+    { numero: 21 },
+    { numero: 22 },
+    { numero: 23 },
+    { numero: 24 },
+
+    { numero: 25 },
+    { numero: 26 },
+    { numero: 27 },
+    { numero: 28 },
+    { numero: 29 },
+    { numero: 30 },
+    { numero: 31 },
+];
+
+export default function AgendaScreen() {
+    const [compromissos, setCompromissos] = useState<Compromisso[]>([]);
+    const hoje = new Date();
+
+    const [mesAtual, setMesAtual] = useState(hoje.getMonth());
+    const [anoAtual, setAnoAtual] = useState(hoje.getFullYear());
+    const [diaSelecionado, setDiaSelecionado] = useState(hoje.getDate());
+
+    const nomesMeses = [
+        'Janeiro',
+        'Fevereiro',
+        'Março',
+        'Abril',
+        'Maio',
+        'Junho',
+        'Julho',
+        'Agosto',
+        'Setembro',
+        'Outubro',
+        'Novembro',
+        'Dezembro',
+    ];
+
+    // Busca os compromissos salvos no celular
+    async function carregarCompromissos() {
+        try {
+            const usuario = auth.currentUser;
+
+            if (!usuario) {
+                setCompromissos([]);
+                return;
+            }
+
+            const referencia = collection(
+                db,
+                'usuarios',
+                usuario.uid,
+                'compromissos'
+            );
+
+            const resultado = await getDocs(referencia);
+
+            const lista: Compromisso[] = resultado.docs.map(
+                (documento) => ({
+                    id: documento.id,
+                    ...(documento.data() as Omit<Compromisso, 'id'>),
+                })
+            );
+
+            setCompromissos(lista);
+
+        } catch (erro) {
+            console.log(
+                'Erro ao carregar compromissos:',
+                erro
+            );
+
+            Alert.alert(
+                'Erro',
+                'Não foi possível carregar os compromissos.'
+            );
+        }
+    }
+
+    // Recarrega os compromissos sempre que a Agenda for aberta
+    useFocusEffect(
+        useCallback(() => {
+            carregarCompromissos();
+        }, [])
+    );
+
+    // Escolhe um ícone de acordo com o tipo
+    function escolherIcone(tipo: string) {
+        const tipoMinusculo = tipo.toLowerCase();
+
+        if (tipoMinusculo.includes('terapia')) {
+            return 'heart-outline';
+        }
+
+        if (tipoMinusculo.includes('consulta')) {
+            return 'medkit-outline';
+        }
+
+        if (tipoMinusculo.includes('escola')) {
+            return 'school-outline';
+        }
+
+        if (tipoMinusculo.includes('fono')) {
+            return 'chatbubble-ellipses-outline';
+        }
+
+        return 'calendar-outline';
+    }
+
+    // Exclui o compromisso do armazenamento
+    async function excluirCompromisso(id: string) {
+        try {
+            const usuario = auth.currentUser;
+
+            if (!usuario) {
+                Alert.alert(
+                    'Erro',
+                    'Você precisa estar conectada.'
+                );
+                return;
+            }
+
+            await deleteDoc(
+                doc(
+                    db,
+                    'usuarios',
+                    usuario.uid,
+                    'compromissos',
+                    id
+                )
+            );
+
+            setCompromissos((listaAtual) =>
+                listaAtual.filter(
+                    (compromisso) => compromisso.id !== id
+                )
+            );
+
+        } catch (erro) {
+            console.log(
+                'Erro ao excluir compromisso:',
+                erro
+            );
+
+            Alert.alert(
+                'Erro',
+                'Não foi possível excluir o compromisso.'
+            );
+        }
+    }
+
+    // Confirma antes de excluir
+    function confirmarExclusao(item: Compromisso) {
+        Alert.alert(
+            'Excluir compromisso',
+            `Deseja realmente excluir "${item.titulo}"?`,
+            [
+                {
+                    text: 'Cancelar',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Excluir',
+                    style: 'destructive',
+                    onPress: () => excluirCompromisso(item.id),
+                },
+            ]
+        );
+    }
+
+    // Abre as opções dos três pontinhos
+    function abrirOpcoes(item: Compromisso) {
+        Alert.alert(
+            item.titulo,
+            'O que você deseja fazer?',
+            [
+                {
+                    text: 'Editar',
+                    onPress: () => {
+                        router.push({
+                            pathname: '/novo-compromisso',
+                            params: {
+                                id: item.id,
+                            },
+                        });
+                    },
+                },
+                {
+                    text: 'Excluir',
+                    style: 'destructive',
+                    onPress: () => confirmarExclusao(item),
+                },
+                {
+                    text: 'Cancelar',
+                    style: 'cancel',
+                },
+            ]
+        );
+    }
+    function mesAnterior() {
+        setDiaSelecionado(1);
+        if (mesAtual === 0) {
+            setMesAtual(11);
+            setAnoAtual(anoAtual - 1);
+        } else {
+            setMesAtual(mesAtual - 1);
+        }
+    }
+
+    function proximoMes() {
+        setDiaSelecionado(1);
+        if (mesAtual === 11) {
+            setMesAtual(0);
+            setAnoAtual(anoAtual + 1);
+        } else {
+            setMesAtual(mesAtual + 1);
+        }
+    }
+    function gerarDiasCalendario() {
+        const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
+        const quantidadeDias = new Date(
+            anoAtual,
+            mesAtual + 1,
+            0
+        ).getDate();
+
+        const diasCalendario: (number | null)[] = [];
+
+        // espaços vazios antes do dia 1
+        for (let i = 0; i < primeiroDia; i++) {
+            diasCalendario.push(null);
+        }
+
+        // dias do mês
+        for (let dia = 1; dia <= quantidadeDias; dia++) {
+            diasCalendario.push(dia);
+        }
+
+        return diasCalendario;
+    }
+
+    const diasDoMes = gerarDiasCalendario();
+    const compromissosDoDia = compromissos.filter((compromisso) => {
+        const compromissosFuturos = compromissos
+            .filter((compromisso) => {
+                const [dia, mes, ano] = compromisso.data
+                    .split('/')
+                    .map(Number);
+
+                const dataCompromisso = new Date(ano, mes - 1, dia);
+
+                const hoje = new Date();
+                hoje.setHours(0, 0, 0, 0);
+
+                return dataCompromisso >= hoje;
+            })
+            .sort((a, b) => {
+                const [diaA, mesA, anoA] = a.data.split('/').map(Number);
+                const [diaB, mesB, anoB] = b.data.split('/').map(Number);
+
+                const dataA = new Date(anoA, mesA - 1, diaA);
+                const dataB = new Date(anoB, mesB - 1, diaB);
+
+                return dataA.getTime() - dataB.getTime();
+            });
+        const dataSelecionada =
+            `${String(diaSelecionado).padStart(2, '0')}/` +
+            `${String(mesAtual + 1).padStart(2, '0')}/` +
+            `${anoAtual}`;
+
+        return compromisso.data === dataSelecionada;
+    });
+    const compromissosFuturos = compromissos
+        .filter((compromisso) => {
+            const [dia, mes, ano] = compromisso.data
+                .split('/')
+                .map(Number);
+
+            const dataCompromisso = new Date(ano, mes - 1, dia);
+
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            return dataCompromisso >= hoje;
+        })
+        .sort((a, b) => {
+            const [diaA, mesA, anoA] = a.data.split('/').map(Number);
+            const [diaB, mesB, anoB] = b.data.split('/').map(Number);
+
+            const dataA = new Date(anoA, mesA - 1, diaA);
+            const dataB = new Date(anoB, mesB - 1, diaB);
+
+            return dataA.getTime() - dataB.getTime();
+        });
+    return (
+        <SafeAreaView style={styles.container}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.conteudo}
+            >
+                {/* Cabeçalho */}
+                <View style={styles.cabecalho}>
+                    <Pressable
+                        style={styles.botaoVoltar}
+                        onPress={() => router.replace('/home')}
+                    >
+                        <Ionicons
+                            name="chevron-back"
+                            size={22}
+                            color="#42A5D5"
+                        />
+                    </Pressable>
+
+                    <Text style={styles.titulo}>Agenda</Text>
+
+
+                </View>
+
+                {/* Calendário */}
+                <View style={styles.calendario}>
+                    <View style={styles.mesArea}>
+                        <Pressable onPress={mesAnterior}>
+                            <Text style={styles.setaMes}>‹</Text>
+                        </Pressable>
+
+                        <Text style={styles.mes}>
+                            {nomesMeses[mesAtual]} {anoAtual}
+                        </Text>
+
+                        <Pressable onPress={proximoMes}>
+                            <Text style={styles.setaMes}>›</Text>
+                        </Pressable>
+                    </View>
+
+                    {/* Dias da semana */}
+                    <View style={styles.diasSemana}>
+                        {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(
+                            (dia, index) => (
+                                <Text
+                                    key={index}
+                                    style={styles.diaSemana}
+                                >
+                                    {dia}
+                                </Text>
+                            )
+                        )}
+                    </View>
+
+                    {/* Dias do calendário */}
+                    <View style={styles.gradeCalendario}>
+                        {diasDoMes.map((dia, index) => {
+                            const dataDoDia =
+                                dia !== null
+                                    ? `${String(dia).padStart(2, '0')}/${String(
+                                        mesAtual + 1
+                                    ).padStart(2, '0')}/${anoAtual}`
+                                    : '';
+
+                            const temCompromisso = compromissos.some(
+                                (compromisso) => compromisso.data === dataDoDia
+                            );
+
+                            return (
+                                <Pressable
+                                    key={index}
+                                    style={styles.diaContainer}
+                                    disabled={dia === null}
+                                    onPress={() => {
+                                        if (dia !== null) {
+                                            setDiaSelecionado(dia);
+                                        }
+                                    }}
+                                >
+                                    <View
+                                        style={[
+                                            styles.dia,
+                                            dia === diaSelecionado &&
+                                            styles.diaSelecionado,
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.numeroDia,
+                                                dia === diaSelecionado &&
+                                                styles.numeroSelecionado,
+                                            ]}
+                                        >
+                                            {dia ?? ''}
+                                        </Text>
+
+                                        {temCompromisso && (
+                                            <View style={styles.bolinhaCompromisso} />
+                                        )}
+                                    </View>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+                    <View style={styles.decoracaoCalendario}>
+
+
+                    </View>
+                </View>
+
+                {/* Título da lista */}
+                <Text style={styles.tituloSecao}>
+                    Compromissos do dia
+                </Text>
+
+                {/* Caso não exista nenhum compromisso */}
+                {compromissosDoDia.length === 0 ? (
+                    <View style={styles.semCompromissos}>
+                        <View style={styles.iconeVazio}>
+                            <Ionicons
+                                name="calendar-outline"
+                                size={28}
+                                color="#42A5D5"
+                            />
+                        </View>
+
+                        <Text style={styles.textoVazio}>
+                            Nenhum compromisso cadastrado.
+                        </Text>
+
+                        <Text style={styles.subtextoVazio}>
+                            Toque no botão + para adicionar.
+                        </Text>
+                    </View>
+                ) : (
+                    /* Lista dos compromissos cadastrados */
+                    compromissosDoDia.map((item) => (
+                        <View
+                            key={item.id}
+                            style={styles.compromisso}
+                        >
+                            <View style={styles.iconeCompromisso}>
+                                <Ionicons
+                                    name={escolherIcone(item.tipo) as any}
+                                    size={22}
+                                    color="#42A5D5"
+                                />
+                            </View>
+
+                            <View style={styles.infoCompromisso}>
+                                <Text style={styles.nomeCompromisso}>
+                                    {item.titulo}
+                                </Text>
+
+                                <Text style={styles.dataCompromisso}>
+                                    {item.data} • {item.horario}
+                                </Text>
+
+                                {item.local ? (
+                                    <Text style={styles.localCompromisso}>
+                                        {item.local}
+                                    </Text>
+                                ) : null}
+                            </View>
+
+                            {/* Botão dos três pontinhos */}
+                            <Pressable
+                                style={styles.botaoMais}
+                                onPress={() => abrirOpcoes(item)}
+                            >
+                                <Text style={styles.mais}>
+                                    •••
+                                </Text>
+                            </Pressable>
+                        </View>
+                    ))
+                )}
+
+                {/* TODOS OS PRÓXIMOS COMPROMISSOS */}
+                <Text style={styles.tituloSecao}>
+                    Próximos compromissos
+                </Text>
+
+                {compromissosFuturos.length === 0 ? (
+                    <View style={styles.semCompromissos}>
+                        <Text style={styles.textoVazio}>
+                            Nenhum compromisso futuro.
+                        </Text>
+                    </View>
+                ) : (
+                    compromissosFuturos.map((item) => (
+                        <View
+                            key={`futuro-${item.id}`}
+                            style={styles.compromisso}
+                        >
+                            <View style={styles.iconeCompromisso}>
+                                <Ionicons
+                                    name={escolherIcone(item.tipo) as any}
+                                    size={22}
+                                    color="#42A5D5"
+                                />
+                            </View>
+
+                            <View style={styles.infoCompromisso}>
+                                <Text style={styles.nomeCompromisso}>
+                                    {item.titulo}
+                                </Text>
+
+                                <Text style={styles.dataCompromisso}>
+                                    {item.data} • {item.horario}
+                                </Text>
+
+                                {item.local ? (
+                                    <Text style={styles.localCompromisso}>
+                                        {item.local}
+                                    </Text>
+                                ) : null}
+                            </View>
+
+                            <Pressable
+                                style={styles.botaoMais}
+                                onPress={() => abrirOpcoes(item)}
+                            >
+                                <Text style={styles.mais}>•••</Text>
+                            </Pressable>
+                        </View>
+                    ))
+                )}
+            </ScrollView>
+
+            {/* Botão para adicionar compromisso */}
+            <Pressable
+                style={styles.botaoAdicionar}
+                onPress={() =>
+                    router.push('/novo-compromisso')
+                }
+            >
+                <Text style={styles.maisAdicionar}>
+                    +
+                </Text>
+            </Pressable>
+
+            {/* Menu inferior */}
+            <View style={styles.menuInferior}>
+
+                <Pressable
+                    style={styles.itemMenu}
+                    onPress={() => router.replace('/home')}
+                >
+                    <Ionicons
+                        name="home-outline"
+                        size={22}
+                        color="#8B979C"
+                    />
+                    <Text style={styles.menuTexto}>
+                        Início
+                    </Text>
+                </Pressable>
+
+                <Pressable style={styles.itemMenu}>
+                    <Ionicons
+                        name="calendar"
+                        size={22}
+                        color="#42A5D5"
+                    />
+                    <Text style={styles.menuTextoAtivo}>
+                        Agenda
+                    </Text>
+                </Pressable>
+
+                <Pressable
+                    style={styles.itemMenu}
+                    onPress={() => router.push('/atividades')}
+                >
+                    <Ionicons
+                        name="clipboard-outline"
+                        size={22}
+                        color="#8B979C"
+                    />
+                    <Text style={styles.menuTexto}>
+                        Atividades
+                    </Text>
+                </Pressable>
+
+                <Pressable
+                    style={styles.itemMenu}
+                    onPress={() => router.push('/orientacoes')}
+                >
+                    <Ionicons
+                        name="book-outline"
+                        size={22}
+                        color="#8B979C"
+                    />
+                    <Text style={styles.menuTexto}>
+                        Orientações
+                    </Text>
+                </Pressable>
+
+
+            </View>
+        </SafeAreaView >
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#DDF3FA',
+    },
+
+    conteudo: {
+        paddingHorizontal: 18,
+        paddingBottom: 125,
+    },
+
+    cabecalho: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 7,
+        marginBottom: 18,
+    },
+
+    botaoVoltar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+
+
+    titulo: {
+        color: '#40515A',
+        fontSize: 20,
+        fontWeight: '700',
+    },
+
+
+
+    calendario: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 25,
+        paddingHorizontal: 15,
+        paddingTop: 17,
+        paddingBottom: 10,
+        marginBottom: 20,
+    },
+
+    mesArea: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 5,
+        marginBottom: 16,
+    },
+
+    mes: {
+        color: '#427DA1',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+
+    setaMes: {
+        color: '#4288AF',
+        fontSize: 24,
+        fontWeight: '700',
+    },
+
+    diasSemana: {
+        flexDirection: 'row',
+        marginBottom: 8,
+    },
+
+    diaSemana: {
+        width: '14.285%',
+        textAlign: 'center',
+        color: '#758187',
+        fontSize: 11,
+        fontWeight: '700',
+    },
+
+    gradeCalendario: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+
+    diaContainer: {
+        width: '14.285%',
+        alignItems: 'center',
+        marginVertical: 4,
+    },
+
+    dia: {
+        width: 31,
+        height: 31,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    diaSelecionado: {
+        backgroundColor: '#FF8FB1',
+    },
+
+    numeroDia: {
+        color: '#46545B',
+        fontSize: 12,
+    },
+
+    numeroSelecionado: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
+
+    outroMes: {
+        color: '#C3C9CC',
+    },
+
+    decoracaoCalendario: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 5,
+        paddingHorizontal: 4,
+    },
+
+    coracao: {
+        color: '#FF8FB1',
+        fontSize: 20,
+    },
+
+    tituloSecao: {
+        color: '#445158',
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 11,
+    },
+
+    compromisso: {
+        minHeight: 76,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 17,
+        marginBottom: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+
+    iconeCompromisso: {
+        width: 45,
+        height: 45,
+        borderRadius: 13,
+        backgroundColor: '#E7F6FA',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+
+
+    infoCompromisso: {
+        flex: 1,
+        marginLeft: 11,
+    },
+
+    nomeCompromisso: {
+        color: '#465159',
+        fontSize: 13,
+        fontWeight: '700',
+    },
+
+    dataCompromisso: {
+        color: '#899398',
+        fontSize: 10,
+        marginTop: 4,
+    },
+
+    localCompromisso: {
+        color: '#42A5D5',
+        fontSize: 10,
+        marginTop: 3,
+    },
+
+    botaoMais: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    mais: {
+        color: '#A5ADB0',
+        fontSize: 15,
+    },
+
+    semCompromissos: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        paddingVertical: 25,
+        paddingHorizontal: 15,
+        alignItems: 'center',
+    },
+
+    iconeVazio: {
+        width: 52,
+        height: 52,
+        borderRadius: 17,
+        backgroundColor: '#EAF7FC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+    },
+
+    textoVazio: {
+        color: '#4D5A60',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+
+    subtextoVazio: {
+        color: '#929DA2',
+        fontSize: 11,
+        marginTop: 4,
+    },
+
+    botaoAdicionar: {
+        position: 'absolute',
+        right: 22,
+        bottom: 102,
+        width: 57,
+        height: 57,
+        borderRadius: 29,
+        backgroundColor: '#FF7FA3',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 7,
+    },
+
+    maisAdicionar: {
+        color: '#FFFFFF',
+        fontSize: 34,
+        fontWeight: '300',
+        marginTop: -3,
+    },
+
+    menuInferior: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 88,
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 25,
+        borderTopRightRadius: 25,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        elevation: 8,
+    },
+
+    itemMenu: {
+        flex: 1,
+        alignItems: 'center',
+    },
+
+
+    menuTexto: {
+        color: '#8B979C',
+        fontSize: 9,
+        marginTop: 4,
+    },
+
+    menuTextoAtivo: {
+        color: '#42A5D5',
+        fontSize: 9,
+        fontWeight: '700',
+        marginTop: 4,
+    },
+    bolinhaCompromisso: {
+        width: 5,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: '#FF6B9A',
+        position: 'absolute',
+        bottom: 2,
+    },
+});
