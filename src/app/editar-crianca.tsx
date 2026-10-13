@@ -3,15 +3,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
-import { auth, db, storage } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 
 import { Ionicons } from '@expo/vector-icons';
-import {
-    deleteObject,
-    getDownloadURL,
-    ref,
-    uploadBytes
-} from 'firebase/storage';
 import {
     Alert,
     Image,
@@ -53,41 +47,47 @@ export default function EditarCriancaScreen() {
     const [observacoes, setObservacoes] = useState('');
 
     const [carregando, setCarregando] = useState(true);
+async function enviarFotoCrianca(uri: string, uid: string) {
+  const usuarioAtual = auth.currentUser;
 
-    async function enviarFotoCrianca(
-        uri: string,
-        uid: string
-    ) {
-        const resposta = await fetch(uri);
-        const blob = await resposta.blob();
+  if (!usuarioAtual || usuarioAtual.uid !== uid) {
+    throw new Error('Usuário não autorizado.');
+  }
 
-        const referenciaFoto = ref(
-            storage,
-            `criancas/${uid}/foto.jpg`
-        );
+  const token = await usuarioAtual.getIdToken();
 
-        await uploadBytes(referenciaFoto, blob);
-
-        const fotoUrl = await getDownloadURL(referenciaFoto);
-
-        await setDoc(
-            doc(
-                db,
-                'usuarios',
-                uid,
-                'crianca',
-                'dados'
-            ),
-            {
-                fotoUrl,
-            },
-            {
-                merge: true,
-            }
-        );
-
-        return fotoUrl;
+  const resposta = await FileSystem.uploadAsync(
+    'http://10.0.2.2:3001/fotos/crianca',
+    uri,
+    {
+      httpMethod: 'POST',
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: 'foto',
+      mimeType: 'image/jpeg',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     }
+  );
+
+  const dados = JSON.parse(resposta.body);
+
+  if (resposta.status < 200 || resposta.status >= 300) {
+    throw new Error(dados.erro || 'Erro ao enviar foto.');
+  }
+await setDoc(
+  doc(db, 'usuarios', uid, 'crianca', 'dados'),
+  {
+    fotoUrl: dados.fotoUrl,
+  },
+  {
+    merge: true,
+  }
+);
+  return dados.fotoUrl;
+}
+
+
     async function escolherFotoCrianca() {
         const permissao =
             await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -119,7 +119,24 @@ export default function EditarCriancaScreen() {
             Alert.alert('Erro', 'Usuário não encontrado.');
             return;
         }
+try {
+  const token = await usuarioAtual.getIdToken();
 
+  const resposta = await fetch(
+    'http://10.0.2.2:3001/teste-autenticacao',
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const dados = await resposta.json();
+
+  console.log('TESTE AUTENTICAÇÃO:', resposta.status, dados);
+} catch (erro) {
+  console.log('ERRO TESTE AUTENTICAÇÃO:', erro);
+}
         const uri = resultado.assets[0].uri;
         try {
             await enviarFotoCrianca(
@@ -128,9 +145,9 @@ export default function EditarCriancaScreen() {
             );
         } catch (erro) {
             console.log(
-                'Erro ao enviar foto da criança:',
-                erro
-            );
+    'ERRO COMPLETO DO UPLOAD:',
+    JSON.stringify(erro, Object.getOwnPropertyNames(erro))
+);
 
             Alert.alert(
                 'Erro',
@@ -191,19 +208,22 @@ export default function EditarCriancaScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            const referenciaFoto = ref(
-                                storage,
-                                `criancas/${usuarioAtual.uid}/foto.jpg`
-                            );
 
-                            try {
-                                await deleteObject(referenciaFoto);
-                            } catch (erroStorage) {
-                                console.log(
-                                    'Foto não encontrada no Storage:',
-                                    erroStorage
-                                );
-                            }
+const token = await usuarioAtual.getIdToken();
+const resposta = await fetch(
+  'http://10.0.2.2:3001/fotos/crianca',
+  {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
+
+if (!resposta.ok) {
+  throw new Error('Não foi possível excluir a foto do Cloudinary.');
+}
+
 
                             await setDoc(
                                 doc(
@@ -454,15 +474,16 @@ export default function EditarCriancaScreen() {
             }
 
             await setDoc(
-                doc(
-                    db,
-                    'usuarios',
-                    usuario.uid,
-                    'crianca',
-                    'dados'
-                ),
-                criancaAtualizada
-            );
+  doc(
+    db,
+    'usuarios',
+    usuario.uid,
+    'crianca',
+    'dados'
+  ),
+  criancaAtualizada,
+  { merge: true }
+);
 
             Alert.alert(
                 'Informações atualizadas! 💙',

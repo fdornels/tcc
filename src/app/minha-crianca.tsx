@@ -53,6 +53,28 @@ export default function MinhaCriancaScreen() {
             setFotoCrianca(null);
             return;
         }
+        try {
+  const referencia = doc(
+    db,
+    'usuarios',
+    usuarioAtual.uid,
+    'crianca',
+    'dados'
+  );
+
+  const documento = await getDoc(referencia);
+
+  if (documento.exists()) {
+    const fotoUrl = documento.data().fotoUrl;
+
+    if (typeof fotoUrl === 'string' && fotoUrl.trim()) {
+      setFotoCrianca(fotoUrl);
+      return;
+    }
+  }
+} catch (erro) {
+  console.log('Erro ao carregar foto online:', erro);
+}
 
         const fotoSalva =
             `${FileSystem.documentDirectory}crianca/${usuarioAtual.uid}.jpg`;

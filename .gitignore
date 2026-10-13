@@ -41,3 +41,8 @@ example
 # generated native folders
 /ios
 /android
+
+# Servidor TEAjudo
+servidor/node_modules/
+servidor/.env
+servidor/firebase-admin-key.json

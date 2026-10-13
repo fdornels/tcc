@@ -1,0 +1,151 @@
+
+require('dotenv').config();
+
+const express = require('express');
+const cors = require('cors');
+const cloudinary = require('cloudinary').v2;
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const multer = require('multer');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => {
+    if (['image/jpeg', 'image/png'].includes(file.mimetype)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Apenas imagens JPG ou PNG são permitidas.'));
+    }
+  },
+});
+
+const serviceAccount = require('./firebase-admin-key.json');
+
+initializeApp({
+  credential: cert(serviceAccount),
+});
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+app.get('/', (req, res) => {
+  res.json({
+    mensagem: 'Servidor do TEAjudo funcionando!',
+  });
+});
+
+async function verificarLogin(req, res, next) {
+  const autorizacao = req.headers.authorization || '';
+
+  if (!autorizacao.startsWith('Bearer ')) {
+    return res.status(401).json({
+      erro: 'Usuário não autenticado.',
+    });
+  }
+
+  const token = autorizacao.substring(7);
+
+  try {
+    const usuario = await getAuth().verifyIdToken(token, true);
+    req.usuario = usuario;
+    next();
+  } catch (erro) {
+    return res.status(401).json({
+      erro: 'Login inválido ou expirado.',
+    });
+  }
+}
+
+app.get('/teste-autenticacao', verificarLogin, (req, res) => {
+  res.json({
+    mensagem: 'Autenticação funcionando!',
+    uid: req.usuario.uid,
+  });
+});
+
+app.post(
+  '/fotos/crianca',
+  verificarLogin,
+  upload.single('foto'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          erro: 'Nenhuma foto enviada.',
+        });
+      }
+
+      const uid = req.usuario.uid;
+
+      const fotoUrl = await new Promise((resolve, reject) => {
+        const envio = cloudinary.uploader.upload_stream(
+          {
+            folder: 'teajudo/criancas',
+            public_id: uid,
+            overwrite: true,
+            resource_type: 'image',
+          },
+          (erro, resultado) => {
+            if (erro) return reject(erro);
+            resolve(resultado.secure_url);
+          }
+        );
+
+        envio.end(req.file.buffer);
+      });
+
+      res.json({ fotoUrl });
+    } catch (erro) {
+      console.error('Erro no upload:', erro.message);
+
+      res.status(500).json({
+        erro: 'Não foi possível enviar a foto.',
+      });
+    }
+  }
+);
+
+app.delete('/fotos/crianca', verificarLogin, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+
+    const resultado = await cloudinary.uploader.destroy(
+      `teajudo/criancas/${uid}`,
+      {
+        resource_type: 'image',
+        invalidate: true,
+      }
+    );
+
+    if (resultado.result !== 'ok' && resultado.result !== 'not found') {
+      return res.status(500).json({
+        erro: 'Não foi possível excluir a foto.',
+      });
+    }
+
+    res.json({
+      mensagem: 'Foto excluída do Cloudinary.',
+    });
+  } catch (erro) {
+    console.error('Erro ao excluir foto:', erro.message);
+
+    res.status(500).json({
+      erro: 'Não foi possível excluir a foto.',
+    });
+  }
+});
+
+const PORT = 3001;
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor TEAjudo rodando na porta ${PORT}`);
+});

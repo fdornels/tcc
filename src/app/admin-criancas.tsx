@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../config/firebase';
 
 type Crianca = {
+    responsavelId?: string;
     id: string;
     nome: string;
     fotoUrl?: string;
@@ -50,12 +51,13 @@ export default function AdminCriancasScreen() {
             const referencia = collectionGroup(db, 'crianca');
             const resultado = await getDocs(referencia);
 
-            const lista: Crianca[] = resultado.docs.map(
-                (documento) => ({
-                    id: documento.id,
-                    ...(documento.data() as Omit<Crianca, 'id'>),
-                })
-            );
+          const lista: Crianca[] = resultado.docs.map(
+  (documento) => ({
+    ...documento.data(),
+    id: documento.id,
+    responsavelId: documento.ref.parent.parent?.parent?.id ?? '',
+  } as Crianca)
+);
 
             lista.sort((a, b) =>
                 (a.nome ?? '').localeCompare(b.nome ?? '')
@@ -203,6 +205,8 @@ export default function AdminCriancasScreen() {
                                 router.push({
                                     pathname: '/admin-crianca-detalhes',
                                     params: {
+                                        fotoUrl: crianca.fotoUrl ?? '',
+                                        uid: crianca.responsavelId ?? '',
                                         nome: crianca.nome ?? '',
                                         apelido: crianca.apelido ?? '',
                                         dataNascimento: crianca.dataNascimento ?? '',
