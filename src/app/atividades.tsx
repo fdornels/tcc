@@ -1,1038 +1,596 @@
 import { Ionicons } from '@expo/vector-icons';
-import {
-    collection,
-    deleteDoc,
-    doc,
-    getDocs,
-} from 'firebase/firestore';
 
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+
+import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+
+import { useCallback, useMemo, useState } from 'react';
+
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { auth, db } from '../../config/firebase';
 
-type Atividade = {
-    id: string;
-    titulo: string;
-    categoria: string;
-    data: string;
-    horario: string;
-    descricao: string;
-    observacoes: string;
+
+
+type Registro = {
+
+  id: string;
+
+  titulo?: string;
+
+  categoria?: string;
+
+  data?: string;
+
+  horario?: string;
+
+  descricao?: string;
+
+  observacoes?: string;
+
+  tipo?: string;
+
 };
 
-const categorias = [
-    {
-        nome: 'Comunicação',
-        icone: '💬',
-        estilo: 'azul',
-    },
-    {
-        nome: 'Alimentação',
-        icone: '🍎',
-        estilo: 'verde',
-    },
-    {
-        nome: 'Escola',
-        icone: '🎒',
-        estilo: 'amarelo',
-    },
-    {
-        nome: 'Sensorial',
-        icone: '🧩',
-        estilo: 'roxo',
-    },
-    {
-        nome: 'Rotina',
-        icone: '🌈',
-        estilo: 'rosa',
-    },
-    {
-        nome: 'Outros',
-        icone: '⭐',
-        estilo: 'azulClaro',
-    },
-];
-
-export default function AtividadesScreen() {
-    const [atividades, setAtividades] = useState<Atividade[]>([]);
-    const [categoriaSelecionada, setCategoriaSelecionada] =
-        useState<string | null>(null);
-
-    const atividadesFiltradas = categoriaSelecionada
-        ? atividades.filter(
-            (atividade) =>
-                atividade.categoria === categoriaSelecionada
-        )
-        : atividades;
-    /*
-     * Toda vez que a tela Atividades recebe foco,
-     * buscamos novamente os dados no AsyncStorage.
-     *
-     * Assim, quando voltamos de "Nova atividade"
-     * ou "Editar atividade", a lista é atualizada.
-     */
-    useFocusEffect(
-        useCallback(() => {
-            carregarAtividades();
-        }, [])
-    );
-
-    async function carregarAtividades() {
-        try {
-            const usuario = auth.currentUser;
-
-            if (!usuario) {
-                setAtividades([]);
-                return;
-            }
-
-            const referencia = collection(
-                db,
-                'usuarios',
-                usuario.uid,
-                'atividades'
-            );
-
-            const resultado = await getDocs(referencia);
-
-            const lista: Atividade[] = resultado.docs.map(
-                (documento) => ({
-                    id: documento.id,
-                    ...(documento.data() as Omit<Atividade, 'id'>),
-                })
-            );
-
-            setAtividades(lista.reverse());
-
-        } catch (erro) {
-            console.log(
-                'Erro ao carregar atividades:',
-                erro
-            );
-
-            Alert.alert(
-                'Erro',
-                'Não foi possível carregar as atividades.'
-            );
-        }
-    }
-
-    function pegarIconeCategoria(categoria: string) {
-        switch (categoria) {
-            case 'Comunicação':
-                return 'chatbubble-ellipses-outline';
-
-            case 'Alimentação':
-                return 'restaurant-outline';
-
-            case 'Escola':
-                return 'school-outline';
-
-            case 'Sensorial':
-                return 'options-outline';
-
-            case 'Rotina':
-                return 'repeat-outline';
-
-            default:
-                return 'ellipsis-horizontal';
-        }
-    }
-    /*
-     * Abre as opções da atividade:
-     * editar, excluir ou cancelar.
-     */
-    function abrirOpcoes(item: Atividade) {
-        Alert.alert(
-            item.titulo,
-            'O que você deseja fazer?',
-            [
-                {
-                    text: 'Editar',
-                    onPress: () => {
-                        router.push({
-                            pathname: '/nova-atividade',
-                            params: {
-                                id: item.id,
-                            },
-                        });
-                    },
-                },
-                {
-                    text: 'Excluir',
-                    style: 'destructive',
-                    onPress: () => confirmarExclusao(item),
-                },
-                {
-                    text: 'Cancelar',
-                    style: 'cancel',
-                },
-            ]
-        );
-    }
-
-    /*
-     * Confirma antes de excluir.
-     */
-    function confirmarExclusao(item: Atividade) {
-        Alert.alert(
-            'Excluir atividade',
-            `Deseja realmente excluir "${item.titulo}"?`,
-            [
-                {
-                    text: 'Cancelar',
-                    style: 'cancel',
-                },
-                {
-                    text: 'Excluir',
-                    style: 'destructive',
-                    onPress: () => excluirAtividade(item.id),
-                },
-            ]
-        );
-    }
-
-    /*
-     * Remove a atividade do AsyncStorage.
-     */
-    async function excluirAtividade(id: string) {
-        try {
-            const usuario = auth.currentUser;
-
-            if (!usuario) {
-                Alert.alert(
-                    'Erro',
-                    'Você precisa estar conectada.'
-                );
-                return;
-            }
-
-            await deleteDoc(
-                doc(
-                    db,
-                    'usuarios',
-                    usuario.uid,
-                    'atividades',
-                    id
-                )
-            );
-
-            setAtividades((listaAtual) =>
-                listaAtual.filter(
-                    (atividade) => atividade.id !== id
-                )
-            );
-
-            Alert.alert(
-                'Atividade excluída',
-                'A atividade foi removida com sucesso.'
-            );
-
-        } catch (erro) {
-            console.log(
-                'Erro ao excluir atividade:',
-                erro
-            );
-
-            Alert.alert(
-                'Erro',
-                'Não foi possível excluir a atividade.'
-            );
-        }
-    }
-
-    return (
-        <SafeAreaView style={styles.container}>
-            <View
-                pointerEvents="none"
-                style={styles.decoracaoFundo}
-            >
-                <View style={styles.manchaRosaTopo} />
-                <View style={styles.manchaAzulTopo} />
-
-                <View style={styles.manchaRosaBaixo} />
-                <View style={styles.manchaAzulBaixo} />
-            </View>
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.conteudo}
-            >
-                {/* Cabeçalho */}
-                <View style={styles.cabecalho}>
-                    <Pressable
-                        style={styles.botaoVoltar}
-                        onPress={() => router.replace('/home')}
-                    >
-                        <Text style={styles.seta}>‹</Text>
-                    </Pressable>
-
-                    <Text style={styles.titulo}>
-                        Atividades
-                    </Text>
 
 
-                </View>
-
-                {/* Introdução */}
-                <View style={styles.introducao}>
-                    <View>
-                        <Text style={styles.tituloIntroducao}>
-                            Acompanhe o dia a dia
-                        </Text>
-
-                        <Text style={styles.subtitulo}>
-                            Registre atividades e momentos importantes da criança.
-                        </Text>
-                    </View>
-                </View>
-
-                {/* Categorias */}
-                <Text style={styles.tituloSecao}>
-                    Categorias
-                </Text>
-                <View style={styles.grade}>
-                    <Pressable
-                        style={[
-                            styles.cardCategoria,
-                            styles.cardCategoriaAzul,
-                            categoriaSelecionada === 'Comunicação' &&
-                            styles.cardCategoriaSelecionado,
-                        ]}
-                        onPress={() =>
-                            setCategoriaSelecionada(
-                                categoriaSelecionada === 'Comunicação'
-                                    ? null
-                                    : 'Comunicação'
-                            )
-                        }
-                    >
-                        <View
-                            style={[
-                                styles.iconeCategoria,
-                                styles.iconeCategoriaAzul,
-                                categoriaSelecionada === 'Comunicação' &&
-                                styles.iconeCategoriaSelecionado,
-                            ]}
-                        >
-                            <Ionicons
-                                name="chatbubble-ellipses-outline"
-                                size={24}
-                                color={
-                                    categoriaSelecionada === 'Comunicação'
-                                        ? '#FFFFFF'
-                                        : '#42A5D5'
-                                }
-                            />
-                        </View>
-
-                        <Text style={styles.nomeCategoria}>
-                            Comunicação
-                        </Text>
-                    </Pressable>
-                    <Pressable
-                        style={[
-                            styles.cardCategoria,
-                            styles.cardCategoriaRosa,
-                            categoriaSelecionada === 'Alimentação' &&
-                            styles.cardCategoriaSelecionado,
-                        ]}
-                        onPress={() =>
-                            setCategoriaSelecionada(
-                                categoriaSelecionada === 'Alimentação'
-                                    ? null
-                                    : 'Alimentação'
-                            )
-                        }
-                    >
-                        <View
-                            style={[
-                                styles.iconeCategoria,
-                                styles.iconeCategoriaRosa,
-                                categoriaSelecionada === 'Alimentação' &&
-                                styles.iconeCategoriaSelecionado,
-                            ]}
-                        >
-                            <Ionicons
-                                name="restaurant-outline"
-                                size={24}
-                                color={
-                                    categoriaSelecionada === 'Alimentação'
-                                        ? '#FFFFFF'
-                                        : '#FF7FA3'
-                                }
-                            />
-                        </View>
-
-                        <Text style={styles.nomeCategoria}>
-                            Alimentação
-                        </Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={[
-                            styles.cardCategoria,
-                            categoriaSelecionada === 'Escola' &&
-                            styles.cardCategoriaSelecionado,
-                        ]}
-                        onPress={() =>
-                            setCategoriaSelecionada(
-                                categoriaSelecionada === 'Escola'
-                                    ? null
-                                    : 'Escola'
-                            )
-                        }
-                    >
-                        <View
-                            style={[
-                                styles.iconeCategoria,
-                                styles.iconeCategoriaAzul,
-                                categoriaSelecionada === 'Escola' &&
-                                styles.iconeCategoriaSelecionado,
-                            ]}
-                        >
-                            <Ionicons
-                                name="school-outline"
-                                size={24}
-                                color={
-                                    categoriaSelecionada === 'Escola'
-                                        ? '#FFFFFF'
-                                        : '#42A5D5'
-                                }
-                            />
-                        </View>
-
-                        <Text style={styles.nomeCategoria}>
-                            Escola
-                        </Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={[
-                            styles.cardCategoria,
-                            styles.cardCategoriaRosa,
-                            categoriaSelecionada === 'Sensorial' &&
-                            styles.cardCategoriaSelecionado,
-                        ]}
-                        onPress={() =>
-                            setCategoriaSelecionada(
-                                categoriaSelecionada === 'Sensorial'
-                                    ? null
-                                    : 'Sensorial'
-                            )
-                        }
-                    >
-                        <View
-                            style={[
-                                styles.iconeCategoria,
-                                styles.iconeCategoriaRosa,
-                                categoriaSelecionada === 'Sensorial' &&
-                                styles.iconeCategoriaSelecionado,
-                            ]}
-                        >
-                            <Ionicons
-                                name="options-outline"
-                                size={24}
-                                color={
-                                    categoriaSelecionada === 'Sensorial'
-                                        ? '#FFFFFF'
-                                        : '#FF7FA3'
-                                }
-                            />
-                        </View>
-
-                        <Text style={styles.nomeCategoria}>
-                            Sensorial
-                        </Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={[
-                            styles.cardCategoria,
-                            categoriaSelecionada === 'Rotina' &&
-                            styles.cardCategoriaSelecionado,
-                        ]}
-                        onPress={() =>
-                            setCategoriaSelecionada(
-                                categoriaSelecionada === 'Rotina'
-                                    ? null
-                                    : 'Rotina'
-                            )
-                        }
-                    >
-                        <View
-                            style={[
-                                styles.iconeCategoria,
-                                styles.iconeCategoriaAzul,
-                                categoriaSelecionada === 'Rotina' &&
-                                styles.iconeCategoriaSelecionado,
-                            ]}
-                        >
-                            <Ionicons
-                                name="repeat-outline"
-                                size={24}
-                                color={
-                                    categoriaSelecionada === 'Rotina'
-                                        ? '#FFFFFF'
-                                        : '#42A5D5'
-                                }
-                            />
-                        </View>
-
-                        <Text style={styles.nomeCategoria}>
-                            Rotina
-                        </Text>
-                    </Pressable>
-
-                    <Pressable
-                        style={[
-                            styles.cardCategoria,
-                            styles.cardCategoriaRosa,
-                            categoriaSelecionada === 'Outros' &&
-                            styles.cardCategoriaSelecionado,
-                        ]}
-                        onPress={() =>
-                            setCategoriaSelecionada(
-                                categoriaSelecionada === 'Outros'
-                                    ? null
-                                    : 'Outros'
-                            )
-                        }
-                    >
-                        <View
-                            style={[
-                                styles.iconeCategoria,
-                                styles.iconeCategoriaRosa,
-                                categoriaSelecionada === 'Outros' &&
-                                styles.iconeCategoriaSelecionado,
-                            ]}
-                        >
-                            <Ionicons
-                                name="ellipsis-horizontal"
-                                size={24}
-                                color={
-                                    categoriaSelecionada === 'Outros'
-                                        ? '#FFFFFF'
-                                        : '#FF7FA3'
-                                }
-                            />
-                        </View>
-
-                        <Text style={styles.nomeCategoria}>
-                            Outros
-                        </Text>
-                    </Pressable>
-                </View>
-
-                {/* Atividades recentes */}
-                <View style={styles.tituloRegistros}>
-                    <Text style={styles.tituloSecao}>
-                        Atividades recentes
-                    </Text>
-
-                    {atividades.length > 0 && (
-                        <Text style={styles.quantidade}>
-                            {atividades.length}{' '}
-                            {atividades.length === 1
-                                ? 'registro'
-                                : 'registros'}
-                        </Text>
-                    )}
-                </View>
-
-                {/* Sem atividades */}
-                {atividades.length === 0 ? (
-                    <View style={styles.semAtividades}>
-                        <View style={styles.iconeVazio}>
-                            <Ionicons
-                                name="clipboard-outline"
-                                size={28}
-                                color="#42A5D5"
-                            />
-                        </View>
-
-                        <Text style={styles.textoVazio}>
-                            Nenhuma atividade registrada.
-                        </Text>
-
-                        <Text style={styles.subtextoVazio}>
-                            Toque no botão + para registrar a primeira.
-                        </Text>
-                    </View>
-                ) : (
-                    /* Lista das atividades */
-                    <View style={styles.listaAtividades}>
-                        {atividadesFiltradas.map((item) => (
-                            <View
-                                key={item.id}
-                                style={styles.cardAtividade}
-                            >
-                                <View style={styles.iconeAtividade}>
-                                    <Ionicons
-                                        name={pegarIconeCategoria(item.categoria) as any}
-                                        size={23}
-                                        color="#42A5D5"
-                                    />
-                                </View>
-
-                                <View style={styles.informacoesAtividade}>
-                                    <Text
-                                        style={styles.tituloAtividade}
-                                        numberOfLines={1}
-                                    >
-                                        {item.titulo}
-                                    </Text>
-
-                                    <Text style={styles.categoriaAtividade}>
-                                        {item.categoria}
-                                    </Text>
-
-                                    <Text style={styles.dataAtividade}>
-                                        {item.data}
-                                        {item.horario
-                                            ? ` • ${item.horario}`
-                                            : ''}
-                                    </Text>
-
-                                    {item.descricao ? (
-                                        <Text
-                                            style={styles.descricaoAtividade}
-                                            numberOfLines={2}
-                                        >
-                                            {item.descricao}
-                                        </Text>
-                                    ) : null}
-                                </View>
-
-                                {/* Três pontinhos */}
-                                <Pressable
-                                    style={styles.botaoMais}
-                                    onPress={() => abrirOpcoes(item)}
-                                    hitSlop={10}
-                                >
-                                    <Text style={styles.mais}>
-                                        •••
-                                    </Text>
-                                </Pressable>
-                            </View>
-                        ))}
-                    </View>
-                )}
-
-
-            </ScrollView>
-
-            {/* Botão + */}
-            <Pressable
-                style={styles.botaoAdicionar}
-                onPress={() => router.push('/nova-atividade')}
-            >
-                <Text style={styles.maisAdicionar}>
-                    +
-                </Text>
-            </Pressable>
+type Icone = React.ComponentProps<typeof Ionicons>['name'];
 
 
 
+const AZUL = '#42A5D5';
+
+const ROSA = '#FF7FA3';
+
+const TEXTO = '#30475D';
+
+const categorias = ['Todas', 'Comunicação', 'Alimentação', 'Escola', 'Sensorial', 'Rotina', 'Outros'];
+
+const filtros = ['Todos', 'Conquistas', 'Dificuldades', 'Momentos'];
 
 
-        </SafeAreaView >
-    );
+
+function tipoRegistro(item: Registro) {
+
+  const valor = (item.tipo || '').trim().toLowerCase();
+
+  if (valor === 'conquista') return 'Conquista';
+
+  if (valor === 'dificuldade') return 'Dificuldade';
+
+  if (valor === 'momento' || valor === 'momento do dia a dia') return 'Momento';
+
+  return 'Registro';
+
 }
 
+
+
+function iconeCategoria(categoria?: string): Icone {
+
+  switch (categoria) {
+
+    case 'Comunicação': return 'chatbubble-ellipses-outline';
+
+    case 'Alimentação': return 'restaurant-outline';
+
+    case 'Escola': return 'school-outline';
+
+    case 'Sensorial': return 'options-outline';
+
+    case 'Rotina': return 'repeat-outline';
+
+    default: return 'book-outline';
+
+  }
+
+}
+
+
+
+function chaveData(item: Registro) {
+
+  const partes = (item.data || '').split('/');
+
+  if (partes.length === 3) {
+
+    const [dia, mes, ano] = partes;
+
+    return `${ano.padStart(4, '0')}${mes.padStart(2, '0')}${dia.padStart(2, '0')}${(item.horario || '').replace(':', '').padStart(4, '0')}`;
+
+  }
+
+  return `${item.data || ''}${item.horario || ''}`;
+
+}
+
+
+
+export default function AtividadesScreen() {
+
+  const [registros, setRegistros] = useState<Registro[]>([]);
+
+  const [carregando, setCarregando] = useState(true);
+
+  const [filtro, setFiltro] = useState('Todos');
+
+  const [categoria, setCategoria] = useState('Todas');
+  const [areasAbertas, setAreasAbertas] = useState(false);
+
+
+
+  const carregarRegistros = useCallback(async () => {
+
+    try {
+
+      const usuario = auth.currentUser;
+
+      if (!usuario) {
+
+        setRegistros([]);
+
+        return;
+
+      }
+
+      const referencia = collection(db, 'usuarios', usuario.uid, 'atividades');
+
+      const resultado = await getDocs(referencia);
+
+      const lista: Registro[] = resultado.docs.map((documento) => ({
+
+        ...(documento.data() as Omit<Registro, 'id'>),
+
+        id: documento.id,
+
+      }));
+
+      lista.sort((a, b) => chaveData(b).localeCompare(chaveData(a)));
+
+      setRegistros(lista);
+
+    } catch (erro) {
+
+      console.log('Erro ao carregar diário:', erro);
+
+      Alert.alert('Erro', 'Não foi possível carregar os registros do diário.');
+
+    } finally {
+
+      setCarregando(false);
+
+    }
+
+  }, []);
+
+
+
+  useFocusEffect(useCallback(() => {
+
+    setCarregando(true);
+
+    void carregarRegistros();
+
+  }, [carregarRegistros]));
+
+
+
+  const registrosFiltrados = useMemo(() => registros.filter((item) => {
+
+    const tipo = tipoRegistro(item);
+
+    const correspondeTipo = filtro === 'Todos' ||
+
+      (filtro === 'Conquistas' && tipo === 'Conquista') ||
+
+      (filtro === 'Dificuldades' && tipo === 'Dificuldade') ||
+
+      (filtro === 'Momentos' && tipo === 'Momento');
+
+    const correspondeCategoria = categoria === 'Todas' || item.categoria === categoria;
+
+    return correspondeTipo && correspondeCategoria;
+
+  }), [registros, filtro, categoria]);
+
+
+
+  async function excluirRegistro(id: string) {
+
+    try {
+
+      const usuario = auth.currentUser;
+
+      if (!usuario) {
+
+        Alert.alert('Acesso necessário', 'Entre na sua conta para continuar.');
+
+        return;
+
+      }
+
+      await deleteDoc(doc(db, 'usuarios', usuario.uid, 'atividades', id));
+
+      setRegistros((atual) => atual.filter((item) => item.id !== id));
+
+    } catch (erro) {
+
+      console.log('Erro ao excluir registro:', erro);
+
+      Alert.alert('Erro', 'Não foi possível excluir o registro.');
+
+    }
+
+  }
+
+
+
+  function confirmarExclusao(item: Registro) {
+
+    Alert.alert('Excluir registro', 'Deseja realmente excluir este registro do diário?', [
+
+      { text: 'Cancelar', style: 'cancel' },
+
+      { text: 'Excluir', style: 'destructive', onPress: () => void excluirRegistro(item.id) },
+
+    ]);
+
+  }
+
+
+
+  function abrirOpcoes(item: Registro) {
+
+    Alert.alert(item.titulo || 'Registro do diário', 'O que deseja fazer?', [
+
+      {
+
+        text: 'Editar',
+
+        onPress: () => router.push({ pathname: '/nova-atividade', params: { id: item.id } }),
+
+      },
+
+      { text: 'Excluir', style: 'destructive', onPress: () => confirmarExclusao(item) },
+
+      { text: 'Cancelar', style: 'cancel' },
+
+    ]);
+
+  }
+
+
+
+  return (
+
+    <SafeAreaView style={styles.container}>
+
+      <View pointerEvents="none" style={styles.decoracao}>
+
+        <View style={styles.rosaTopo} />
+
+        <View style={styles.azulTopo} />
+
+        <View style={styles.rosaBaixo} />
+
+        <View style={styles.azulBaixo} />
+
+      </View>
+
+
+
+      <ScrollView contentContainerStyle={styles.conteudo} showsVerticalScrollIndicator={false}>
+
+        <View style={styles.cabecalho}>
+
+          <Pressable onPress={() => router.replace('/home')} style={styles.voltar} accessibilityLabel="Voltar para início">
+
+            <Ionicons name="chevron-back" size={22} color={ROSA} />
+
+          </Pressable>
+
+          <Text style={styles.tituloPagina}>Meu Diário</Text>
+
+          <View style={styles.espacoCabecalho} />
+
+        </View>
+
+
+
+        <View style={styles.introducao}>
+
+          <View style={styles.iconeIntroducao}>
+
+            <Ionicons name="book-outline" size={25} color={ROSA} />
+
+          </View>
+
+          <View style={styles.introducaoTexto}>
+
+            <Text style={styles.introducaoTitulo}>Cada momento importa</Text>
+
+            <Text style={styles.introducaoSubtitulo}>Guarde conquistas, desafios e momentos especiais da rotina.</Text>
+
+          </View>
+
+        </View>
+
+
+
+        <View style={styles.cabecalhoSecao}>
+
+          <View>
+
+            <Text style={styles.tituloSecao}>Registros do dia a dia</Text>
+
+            <Text style={styles.subtituloSecao}>Um histórico para acompanhar com carinho.</Text>
+
+          </View>
+
+          <Text style={styles.contador}>{registros.length}</Text>
+
+        </View>
+
+
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtrosRolagem} contentContainerStyle={styles.filtros}>
+          {filtros.map((opcao) => (
+            <Pressable key={opcao} onPress={() => setFiltro(opcao)} style={[styles.filtro, filtro === opcao && styles.filtroAtivo]}>
+              <Text style={[styles.filtroTexto, filtro === opcao && styles.filtroTextoAtivo]}>{opcao}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <View style={styles.categoriasLinha}>
+          <Text style={styles.categoriasRotulo}>Filtrar por área</Text>
+          <Pressable
+            style={[styles.seletorArea, areasAbertas && styles.seletorAreaAberto]}
+            onPress={() => setAreasAbertas((aberto) => !aberto)}
+            accessibilityRole="button"
+            accessibilityLabel={`Área: ${categoria === 'Todas' ? 'Todas as áreas' : categoria}`}
+            accessibilityState={{ expanded: areasAbertas }}
+          >
+            <View style={styles.seletorAreaEsquerda}>
+              <Ionicons name="options-outline" size={18} color={AZUL} />
+              <Text style={styles.seletorAreaTexto}>{categoria === 'Todas' ? 'Todas as áreas' : categoria}</Text>
+            </View>
+            <Ionicons name={areasAbertas ? 'chevron-up' : 'chevron-down'} size={18} color="#77909D" />
+          </Pressable>
+          {areasAbertas && (
+            <View style={styles.listaAreas}>
+              {categorias.map((opcao, indice) => (
+                <Pressable
+                  key={opcao}
+                  style={[styles.opcaoArea, indice < categorias.length - 1 && styles.opcaoAreaDivisoria]}
+                  onPress={() => { setCategoria(opcao); setAreasAbertas(false); }}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.opcaoAreaTexto, categoria === opcao && styles.opcaoAreaAtiva]}>
+                    {opcao === 'Todas' ? 'Todas as áreas' : opcao}
+                  </Text>
+                  {categoria === opcao && <Ionicons name="checkmark" size={18} color={AZUL} />}
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {carregando ? (
+
+          <View style={styles.vazio}><Text style={styles.vazioTexto}>Carregando seu diário...</Text></View>
+
+        ) : registrosFiltrados.length === 0 ? (
+
+          <View style={styles.vazio}>
+
+            <View style={styles.vazioIcone}><Ionicons name="book-outline" size={29} color={AZUL} /></View>
+
+            <Text style={styles.vazioTitulo}>{registros.length === 0 ? 'Seu diário começa aqui' : 'Nenhum registro neste filtro'}</Text>
+
+            <Text style={styles.vazioTexto}>{registros.length === 0 ? 'Registre uma conquista, uma dificuldade ou um momento importante.' : 'Experimente selecionar outro tipo ou categoria.'}</Text>
+
+          </View>
+
+        ) : (
+
+          <View style={styles.lista}>
+
+            {registrosFiltrados.map((item) => {
+
+              const tipo = tipoRegistro(item);
+
+              const rosa = tipo === 'Conquista' || tipo === 'Momento';
+
+              return (
+
+                <View key={item.id} style={styles.registro}>
+
+                  <View style={[styles.registroIcone, rosa ? styles.fundoRosa : styles.fundoAzul]}>
+
+                    <Ionicons name={tipo === 'Conquista' ? 'sparkles-outline' : tipo === 'Dificuldade' ? 'leaf-outline' : iconeCategoria(item.categoria)} size={22} color={rosa ? ROSA : AZUL} />
+
+                  </View>
+
+                  <View style={styles.registroConteudo}>
+
+                    <View style={styles.registroTopo}>
+
+                      <Text style={[styles.tipo, { color: rosa ? '#DC6B94' : '#368FBC' }]}>{tipo}</Text>
+
+                      <Pressable style={styles.opcoes} onPress={() => abrirOpcoes(item)} accessibilityLabel="Opções do registro">
+
+                        <Ionicons name="ellipsis-horizontal" size={21} color="#8B9CA7" />
+
+                      </Pressable>
+
+                    </View>
+
+                    <Text style={styles.registroTitulo}>{item.titulo || 'Momento registrado'}</Text>
+
+                    {!!item.descricao && <Text style={styles.registroDescricao}>{item.descricao}</Text>}
+
+                    {!!item.observacoes && <Text style={styles.registroObservacoes}>{item.observacoes}</Text>}
+
+                    <View style={styles.metadados}>
+
+                      {!!item.categoria && <Text style={styles.metadado}>{item.categoria}</Text>}
+
+                      {!!item.data && <Text style={styles.metadado}>{item.data}{item.horario ? ` · ${item.horario}` : ''}</Text>}
+
+                    </View>
+
+                  </View>
+
+                </View>
+
+              );
+
+            })}
+
+          </View>
+
+        )}
+
+      </ScrollView>
+
+
+
+      <View style={styles.rodapeAcao}>
+
+        <Pressable style={styles.botaoNovo} onPress={() => router.push('/nova-atividade')}>
+
+          <Ionicons name="add" size={22} color="#FFFFFF" />
+
+          <Text style={styles.botaoNovoTexto}>Novo registro</Text>
+
+        </Pressable>
+
+      </View>
+
+    </SafeAreaView>
+
+  );
+
+}
+
+
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F9FCFD',
-    },
 
-    conteudo: {
-        paddingHorizontal: 18,
-        paddingBottom: 125,
-    },
+  container: { flex: 1, backgroundColor: '#F9FCFD' },
 
-    cabecalho: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 7,
-        marginBottom: 22,
-    },
+  decoracao: {
 
-    botaoVoltar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    position: 'absolute',
 
-    seta: {
-        color: '#4288AF',
-        fontSize: 30,
-        lineHeight: 31,
-    },
+    top: 0,
 
-    titulo: {
-        color: '#40515A',
-        fontSize: 20,
-        fontWeight: '700',
-    },
+    bottom: 0,
 
+    left: 0,
 
-    introducao: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-        padding: 18,
-        marginBottom: 22,
-    },
+    right: 0,
 
-    tituloIntroducao: {
-        color: '#445158',
-        fontSize: 18,
-        fontWeight: '700',
-    },
+    overflow: 'hidden',
 
-    subtitulo: {
-        color: '#7D898E',
-        fontSize: 12,
-        lineHeight: 18,
-        marginTop: 5,
-    },
+},
 
-    tituloSecao: {
-        color: '#445158',
-        fontSize: 16,
-        fontWeight: '700',
-        marginBottom: 12,
-    },
+  rosaTopo: { position: 'absolute', top: -115, left: -100, width: 275, height: 240, borderRadius: 140, backgroundColor: '#FCE8F0' },
 
-    grade: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        gap: 10,
-    },
+  azulTopo: { position: 'absolute', top: -120, right: -110, width: 280, height: 230, borderRadius: 145, backgroundColor: '#E5F5FC' },
 
-    cardCategoria: {
-        width: '30%',
-        height: 105,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'transparent',
-    },
+  rosaBaixo: { position: 'absolute', bottom: -150, left: -120, width: 310, height: 235, borderRadius: 160, backgroundColor: '#FCE8F0' },
 
-    azul: {
-        backgroundColor: '#DDF3FA',
-        borderWidth: 1,
-        borderColor: '#C6E8F2',
-    },
+  azulBaixo: { position: 'absolute', bottom: -145, right: -130, width: 320, height: 240, borderRadius: 160, backgroundColor: '#E5F5FC' },
 
-    verde: {
-        backgroundColor: '#DDF1D6',
-    },
+  conteudo: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 110 },
 
-    amarelo: {
-        backgroundColor: '#FFF1C9',
-    },
+  cabecalho: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 38 },
 
-    roxo: {
-        backgroundColor: '#E8DDF5',
-    },
+  voltar: { width: 39, height: 39, borderRadius: 20, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
 
-    rosa: {
-        backgroundColor: '#F8DDE6',
-    },
+  tituloPagina: { color: TEXTO, fontSize: 19, fontWeight: '700' },
 
-    azulClaro: {
-        backgroundColor: '#E7F6FA',
-    },
+  espacoCabecalho: { width: 39 },
 
-    emoji: {
-        fontSize: 27,
-        marginBottom: 6,
-    },
+  introducao: { backgroundColor: '#FFF0F5', borderRadius: 22, padding: 17, flexDirection: 'row', alignItems: 'center', marginBottom: 28, borderWidth: 1, borderColor: '#FBE3EB' },
 
-    nomeCategoria: {
-        color: '#566268',
-        fontSize: 10,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
+  iconeIntroducao: { width: 49, height: 49, borderRadius: 16, backgroundColor: '#FFE1EC', alignItems: 'center', justifyContent: 'center', marginRight: 13 },
 
-    tituloRegistros: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
+  introducaoTexto: { flex: 1 },
 
-    quantidade: {
-        color: '#42A5D5',
-        fontSize: 11,
-        marginBottom: 12,
-    },
+  introducaoTitulo: { color: TEXTO, fontSize: 15, fontWeight: '700', marginBottom: 5 },
 
-    semAtividades: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        paddingVertical: 27,
-        paddingHorizontal: 15,
-        alignItems: 'center',
-    },
+  introducaoSubtitulo: { color: '#788B97', fontSize: 11, lineHeight: 16 },
 
-    iconeVazio: {
-        width: 52,
-        height: 52,
-        borderRadius: 17,
-        backgroundColor: '#EAF7FC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
-    },
+  cabecalhoSecao: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
 
-    textoVazio: {
-        color: '#4D5A60',
-        fontSize: 14,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
+  tituloSecao: { color: TEXTO, fontSize: 17, fontWeight: '700' },
 
-    subtextoVazio: {
-        color: '#929DA2',
-        fontSize: 11,
-        marginTop: 5,
-        textAlign: 'center',
-    },
+  subtituloSecao: { color: '#8799A4', fontSize: 11, marginTop: 4 },
 
-    listaAtividades: {
-        gap: 10,
-    },
+  contador: { color: AZUL, fontSize: 13, fontWeight: '700' },
 
-    cardAtividade: {
-        minHeight: 105,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
+  filtrosRolagem: { marginBottom: 16, flexGrow: 0 },
+  filtros: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  filtro: { backgroundColor: '#FFFFFF', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: '#E7EFF3', alignItems: 'center' },
+  filtroAtivo: { backgroundColor: ROSA, borderColor: ROSA },
+  filtroTexto: { color: '#6C8190', fontSize: 12, fontWeight: '600' },
+  filtroTextoAtivo: { color: '#FFFFFF' },
+  categoriasLinha: { marginBottom: 20 },
+  categoriasRotulo: { color: '#748A98', fontSize: 11, fontWeight: '600', marginBottom: 8 },
+  seletorArea: { minHeight: 47, paddingHorizontal: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E3EDF2', borderRadius: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  seletorAreaAberto: { borderColor: '#A8D9EE' },
+  seletorAreaEsquerda: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  seletorAreaTexto: { fontSize: 13, fontWeight: '600', color: TEXTO },
+  listaAreas: { marginTop: 7, backgroundColor: '#FFFFFF', borderRadius: 15, borderWidth: 1, borderColor: '#E3EDF2', overflow: 'hidden' },
+  opcaoArea: { paddingHorizontal: 15, minHeight: 43, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  opcaoAreaDivisoria: { borderBottomWidth: 1, borderBottomColor: '#F0F4F6' },
+  opcaoAreaTexto: { color: '#617889', fontSize: 13 },
+  opcaoAreaAtiva: { color: AZUL, fontWeight: '700' },
 
-    iconeAtividade: {
-        width: 48,
-        height: 48,
-        borderRadius: 15,
-        backgroundColor: '#EDF8FB',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 11,
-    },
+  lista: { gap: 13 },
 
+  registro: { backgroundColor: '#FFFFFF', borderRadius: 21, padding: 17, flexDirection: 'row', borderWidth: 1, borderColor: '#EDF3F6' },
 
+  registroIcone: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
 
-    informacoesAtividade: {
-        flex: 1,
-        paddingRight: 5,
-    },
+  fundoRosa: { backgroundColor: '#FFF0F5' },
 
-    tituloAtividade: {
-        color: '#46545B',
-        fontSize: 13,
-        fontWeight: '700',
-    },
+  fundoAzul: { backgroundColor: '#EAF7FC' },
 
-    categoriaAtividade: {
-        color: '#42A5D5',
-        fontSize: 10,
-        fontWeight: '600',
-        marginTop: 2,
-    },
+  registroConteudo: { flex: 1 },
 
-    dataAtividade: {
-        color: '#89969B',
-        fontSize: 10,
-        marginTop: 3,
-    },
+  registroTopo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 
-    descricaoAtividade: {
-        color: '#69767B',
-        fontSize: 10,
-        lineHeight: 14,
-        marginTop: 5,
-    },
+  tipo: { fontSize: 10, fontWeight: '700' },
 
-    botaoMais: {
-        width: 34,
-        minHeight: 50,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+  opcoes: { paddingHorizontal: 6, paddingVertical: 3 },
 
-    mais: {
-        color: '#A4AFB3',
-        fontSize: 17,
-        fontWeight: '700',
-        letterSpacing: 1,
-    },
+  registroTitulo: { color: TEXTO, fontSize: 14, fontWeight: '700', marginTop: 3 },
 
+  registroDescricao: { color: '#647A89', fontSize: 12, lineHeight: 19, marginTop: 8 },
 
+  registroObservacoes: { color: '#80919C', fontSize: 11, lineHeight: 17, marginTop: 7 },
 
-    botaoAdicionar: {
-        position: 'absolute',
-        right: 22,
-        bottom: 102,
-        width: 57,
-        height: 57,
-        borderRadius: 29,
-        backgroundColor: '#FF7FA3',
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 7,
-        zIndex: 10,
-    },
+  metadados: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
 
-    maisAdicionar: {
-        color: '#FFFFFF',
-        fontSize: 34,
-        fontWeight: '300',
-        marginTop: -3,
-    },
+  metadado: { color: '#92A1AA', fontSize: 10 },
 
-    menuInferior: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 88,
-        backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: 25,
-        borderTopRightRadius: 25,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        elevation: 8,
-    },
+  vazio: { backgroundColor: '#FFFFFF', borderRadius: 22, padding: 25, alignItems: 'center', borderWidth: 1, borderColor: '#EDF3F6' },
 
-    itemMenu: {
-        flex: 1,
-        alignItems: 'center',
-    },
+  vazioIcone: { width: 58, height: 58, borderRadius: 20, backgroundColor: '#EAF7FC', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
 
-    menuIcone: {
-        color: '#8B979C',
-        fontSize: 22,
-    },
+  vazioTitulo: { color: TEXTO, fontSize: 15, fontWeight: '700', textAlign: 'center', marginBottom: 6 },
 
-    menuIconeAtivo: {
-        color: '#42A5D5',
-        fontSize: 22,
-        fontWeight: '700',
-    },
+  vazioTexto: { color: '#8396A2', fontSize: 12, lineHeight: 18, textAlign: 'center' },
 
-    menuTexto: {
-        color: '#8B979C',
-        fontSize: 9,
-        marginTop: 4,
-    },
+  rodapeAcao: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 13, backgroundColor: '#F9FCFD', borderTopWidth: 1, borderTopColor: '#EAF0F3' },
 
-    menuTextoAtivo: {
-        color: '#42A5D5',
-        fontSize: 9,
-        fontWeight: '700',
-        marginTop: 4,
-    },
-    cardCategoriaSelecionado: {
-        backgroundColor: '#FFF0F5',
-        borderColor: '#FF7FA3',
-    },
+  botaoNovo: { backgroundColor: ROSA, height: 48, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, elevation: 2 },
 
-    iconeCategoria: {
-        width: 42,
-        height: 42,
-        borderRadius: 14,
-        backgroundColor: 'rgba(255,255,255,0.55)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 10,
-    },
-    iconeCategoriaAzul: {
-        backgroundColor: '#EAF7FC',
-    },
+  botaoNovoTexto: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
-    iconeCategoriaRosa: {
-        backgroundColor: '#FFF0F5',
-    },
-
-    iconeCategoriaSelecionado: {
-        backgroundColor: '#FF7FA3',
-    },
-    decoracaoFundo: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        overflow: 'hidden',
-    },
-
-    manchaRosaTopo: {
-        position: 'absolute',
-        width: 270,
-        height: 210,
-        borderRadius: 140,
-        backgroundColor: '#FFE8F0',
-        top: -105,
-        left: -85,
-        opacity: 0.85,
-    },
-
-    manchaAzulTopo: {
-        position: 'absolute',
-        width: 290,
-        height: 210,
-        borderRadius: 150,
-        backgroundColor: '#E2F5FC',
-        top: -115,
-        right: -100,
-        opacity: 0.9,
-    },
-
-    manchaRosaBaixo: {
-        position: 'absolute',
-        width: 350,
-        height: 230,
-        borderRadius: 180,
-        backgroundColor: '#FFE5EE',
-        bottom: -110,
-        left: -130,
-        opacity: 0.8,
-    },
-
-    manchaAzulBaixo: {
-        position: 'absolute',
-        width: 360,
-        height: 230,
-        borderRadius: 190,
-        backgroundColor: '#DCF3FC',
-        bottom: -120,
-        right: -150,
-        opacity: 0.85,
-    },
-    cardCategoriaAzul: {
-        backgroundColor: '#EDF8FC',
-    },
-
-    cardCategoriaRosa: {
-        backgroundColor: '#FFF0F5',
-    },
 });

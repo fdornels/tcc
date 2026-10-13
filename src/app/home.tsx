@@ -1,789 +1,569 @@
 import { Ionicons } from '@expo/vector-icons';
+
 import * as FileSystem from 'expo-file-system/legacy';
+
 import { router, useFocusEffect } from 'expo-router';
-import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-} from 'firebase/firestore';
+
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+
 import { useCallback, useState } from 'react';
-import {
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
-} from 'react-native';
+
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { auth, db } from '../../config/firebase';
+
+
+
 type Compromisso = {
+
     id: string;
+
     titulo: string;
+
     data: string;
+
     horario: string;
+
 };
 
+
+
 export default function HomeScreen() {
+
     const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
-    const nomeUsuario =
-        auth.currentUser?.displayName || 'Usuária';
 
     const [ehAdmin, setEhAdmin] = useState(false);
 
+    const [proximoCompromisso, setProximoCompromisso] = useState<Compromisso | null>(null);
+
+    const nomeUsuario = auth.currentUser?.displayName?.trim() || 'você';
+
+    const primeiroNome = nomeUsuario.split(' ')[0];
 
 
-    const [proximoCompromisso, setProximoCompromisso] =
-        useState<Compromisso | null>(null);
-    async function carregarFotoPerfil() {
-        const usuarioAtual = auth.currentUser;
 
-        if (!usuarioAtual) {
+    const carregarFotoPerfil = useCallback(async () => {
+
+        const usuario = auth.currentUser;
+
+        if (!usuario) {
+
             setFotoPerfil(null);
+
             return;
+
         }
 
-        const fotoSalva =
-            `${FileSystem.documentDirectory}perfil/${usuarioAtual.uid}.jpg`;
-
-        const infoFoto = await FileSystem.getInfoAsync(fotoSalva);
-
-        if (infoFoto.exists) {
-            setFotoPerfil(fotoSalva);
-        } else {
-            setFotoPerfil(null);
-        }
-    }
-    useFocusEffect(
-        useCallback(() => {
-            carregarFotoPerfil();
-        }, [])
-    );
-    async function verificarAdmin() {
         try {
-            const usuario = auth.currentUser;
 
-            if (!usuario) {
-                setEhAdmin(false);
-                return;
-            }
+            const caminho = `${FileSystem.documentDirectory}perfil/${usuario.uid}.jpg`;
 
-            const documento = await getDoc(
-                doc(db, 'usuarios', usuario.uid)
-            );
+            const info = await FileSystem.getInfoAsync(caminho);
 
-            setEhAdmin(
-                documento.exists() &&
-                documento.data().admin === true
-            );
+            setFotoPerfil(info.exists ? caminho : null);
+
         } catch (erro) {
-            console.log(
-                'Erro ao verificar admin:',
-                erro
-            );
+
+            console.log('Erro ao carregar foto de perfil:', erro);
+
+            setFotoPerfil(null);
+
+        }
+
+    }, []);
+
+
+
+    const verificarAdmin = useCallback(async () => {
+
+        const usuario = auth.currentUser;
+
+        if (!usuario) {
 
             setEhAdmin(false);
+
+            return;
+
         }
-    }
-    async function carregarProximoCompromisso() {
+
         try {
-            const usuario = auth.currentUser;
 
-            if (!usuario) {
-                setProximoCompromisso(null);
-                return;
-            }
+            const resultado = await getDoc(doc(db, 'usuarios', usuario.uid));
 
-            const referencia = collection(
-                db,
-                'usuarios',
-                usuario.uid,
-                'compromissos'
-            );
+            setEhAdmin(resultado.exists() && resultado.data().admin === true);
+
+        } catch (erro) {
+
+            console.log('Erro ao verificar admin:', erro);
+
+            setEhAdmin(false);
+
+        }
+
+    }, []);
+
+
+
+    const carregarProximoCompromisso = useCallback(async () => {
+
+        const usuario = auth.currentUser;
+
+        if (!usuario) {
+
+            setProximoCompromisso(null);
+
+            return;
+
+        }
+
+        try {
+
+            const referencia = collection(db, 'usuarios', usuario.uid, 'compromissos');
 
             const resultado = await getDocs(referencia);
 
-            const compromissos: Compromisso[] =
-                resultado.docs.map((documento) => ({
-                    id: documento.id,
-                    ...(documento.data() as Omit<Compromisso, 'id'>),
-                }));
+            const compromissos: Compromisso[] = resultado.docs.map((item) => ({
 
-            const converterData = (valor: string) => {
-                const [dia, mes, ano] = valor.split('/');
+                id: item.id,
 
-                return new Date(
-                    Number(ano),
-                    Number(mes) - 1,
-                    Number(dia)
-                );
+                ...(item.data() as Omit<Compromisso, 'id'>),
+
+            }));
+
+
+
+            const dataCompromisso = (item: Compromisso) => {
+
+                const [dia, mes, ano] = item.data.split('/').map(Number);
+
+                const [hora = 0, minuto = 0] = (item.horario || '').split(':').map(Number);
+
+                return new Date(ano, mes - 1, dia, hora, minuto).getTime();
+
             };
 
-            const agora = new Date();
-            agora.setHours(0, 0, 0, 0);
+            const agora = Date.now();
 
             const futuros = compromissos
-                .filter(
-                    (compromisso) =>
-                        converterData(compromisso.data) >= agora
-                )
-                .sort(
-                    (a, b) =>
-                        converterData(a.data).getTime() -
-                        converterData(b.data).getTime()
-                );
+
+                .filter((item) => Number.isFinite(dataCompromisso(item)) && dataCompromisso(item) >= agora)
+
+                .sort((a, b) => dataCompromisso(a) - dataCompromisso(b));
 
             setProximoCompromisso(futuros[0] ?? null);
 
         } catch (erro) {
-            console.log(
-                'Erro ao carregar próximo compromisso:',
-                erro
-            );
-        }
-    }
 
-    useFocusEffect(
-        useCallback(() => {
-            verificarAdmin();
-            carregarProximoCompromisso();
-        }, [])
-    );
+            console.log('Erro ao carregar compromissos:', erro);
+
+            setProximoCompromisso(null);
+
+        }
+
+    }, []);
+
+
+
+    useFocusEffect(useCallback(() => {
+
+        carregarFotoPerfil();
+
+        verificarAdmin();
+
+        carregarProximoCompromisso();
+
+    }, [carregarFotoPerfil, verificarAdmin, carregarProximoCompromisso]));
+
+
 
     return (
-        <SafeAreaView style={styles.container}>
-            <View
-                pointerEvents="none"
-                style={styles.decoracaoFundo}
-            >
-                <View style={styles.manchaRosaTopo} />
-                <View style={styles.manchaAzulTopo} />
 
-                <View style={styles.manchaRosaBaixo} />
-                <View style={styles.manchaAzulBaixo} />
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+
+            <View pointerEvents="none" style={styles.fundoDecorativo}>
+
+                <View style={styles.rosaTopo} />
+
+                <View style={styles.azulTopo} />
+
+                <View style={styles.rosaBaixo} />
+
+                <View style={styles.azulBaixo} />
+
             </View>
-            <ScrollView
-                contentContainerStyle={styles.conteudo}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Cabeçalho */}
+
+
+
+            <ScrollView contentContainerStyle={styles.conteudo} showsVerticalScrollIndicator={false}>
+
                 <View style={styles.cabecalho}>
-                    {ehAdmin ? (
-                        <Pressable onPress={() => router.push('/admin')}>
-                            <Ionicons
-                                name="shield-checkmark-outline"
-                                size={24}
-                                color="#3D8FB7"
-                            />
-                        </Pressable>
-                    ) : (
-                        <View style={{ width: 24 }} />
-                    )}
+
+                    <View style={styles.acaoCabecalho}>
+
+                        {ehAdmin && (
+
+                            <Pressable onPress={() => router.push('/admin')} style={styles.botaoCabecalho} accessibilityLabel="Administração">
+
+                                <Ionicons name="shield-checkmark-outline" size={20} color="#42A5D5" />
+
+                            </Pressable>
+
+                        )}
+
+                    </View>
 
                     <View style={styles.logoArea}>
-                        <Text style={styles.logo}>
-                            <Text style={styles.logoRosa}>(TE)</Text>
-                            <Text style={styles.logoAzul}>AJUDO</Text>
-                        </Text>
 
-                        <Text style={styles.slogan}>
-                            Apoio à maternidade atípica
-                        </Text>
+                        <Text style={styles.logo}><Text style={styles.logoRosa}>(TE)</Text><Text style={styles.logoAzul}>AJUDO</Text></Text>
+
+                        <Text style={styles.slogan}>Apoio à maternidade atípica</Text>
+
                     </View>
 
-                    <Pressable
-                        onPress={() => router.push('/configuracoes')}
-                    >
-                        <Ionicons
-                            name="settings-outline"
-                            size={25}
-                            color="#3D8FB7"
-                        />
-                    </Pressable>
+                    <View style={styles.acaoCabecalho}>
+
+                        <Pressable onPress={() => router.push('/configuracoes')} style={styles.botaoCabecalho} accessibilityLabel="Configurações">
+
+                            <Ionicons name="settings-outline" size={21} color="#647D8B" />
+
+                        </Pressable>
+
+                    </View>
+
                 </View>
 
-                {/* Boas-vindas */}
-                <View style={styles.boasVindas}>
+
+
+                <View style={styles.saudacao}>
+
                     <View style={styles.avatar}>
+
                         {fotoPerfil ? (
-                            <Image
-                                source={{ uri: fotoPerfil }}
-                                style={styles.fotoPerfil}
-                            />
+
+                            <Image source={{ uri: fotoPerfil }} style={styles.fotoPerfil} />
+
                         ) : (
-                            <Ionicons
-                                name="person-outline"
-                                size={34}
-                                color="#42A5D5"
-                            />
+
+                            <Ionicons name="person-outline" size={29} color="#42A5D5" />
+
                         )}
+
                     </View>
 
-                    <View style={styles.boasVindasTexto}>
-                        <Text style={styles.ola}>
-                            Olá, {nomeUsuario}!
-                        </Text>
-                        <Text style={styles.mensagem}>
-                            Que bom ter você por aqui.
-                        </Text>
+                    <View style={styles.saudacaoTexto}>
+
+                        <Text style={styles.ola}>Olá, {primeiroNome}!</Text>
+
+                        <Text style={styles.mensagem}>Que bom ter você por aqui.</Text>
+
                     </View>
+
                 </View>
 
-                <View style={styles.proximoCard}>
-                    <View style={styles.proximoCabecalho}>
-                        <Ionicons
-                            name="calendar-outline"
-                            size={21}
-                            color="#9AA7AD"
-                        />
 
-                        <Text style={styles.proximoTitulo}>
-                            Próximo compromisso
-                        </Text>
+
+                <Pressable style={styles.compromissoCard} onPress={() => router.push('/agenda')}>
+
+                    <View style={styles.compromissoIcone}>
+
+                        <Ionicons name="calendar-outline" size={24} color="#E276A0" />
+
                     </View>
 
-                    {proximoCompromisso ? (
-                        <>
-                            <Text style={styles.proximoNome}>
-                                {proximoCompromisso.titulo}
-                            </Text>
+                    <View style={styles.compromissoTexto}>
 
-                            <Text style={styles.proximoDetalhe}>
-                                {proximoCompromisso.data}
-                                {proximoCompromisso.horario
-                                    ? ` • ${proximoCompromisso.horario}`
-                                    : ''}
-                            </Text>
-                        </>
-                    ) : (
-                        <Text style={styles.proximoDetalhe}>
-                            Nenhum compromisso próximo.
+                        <Text style={styles.compromissoLabel}>SEU PRÓXIMO COMPROMISSO</Text>
+
+                        <Text style={styles.compromissoNome} numberOfLines={2}>
+
+                            {proximoCompromisso?.titulo || 'Sua agenda está tranquila'}
+
                         </Text>
-                    )}
-                </View>
-                <Text style={styles.tituloSecao}>Sua rotina rápida</Text>
 
-                {/* Acessos principais */}
+                        <Text style={styles.compromissoDetalhe}>
+
+                            {proximoCompromisso
+
+                                ? `${proximoCompromisso.data}${proximoCompromisso.horario ? `  •  ${proximoCompromisso.horario}` : ''}`
+
+                                : 'Toque para organizar seus compromissos'}
+
+                        </Text>
+
+                    </View>
+
+                    <Ionicons name="chevron-forward" size={17} color="#D58CA7" />
+
+                </Pressable>
+
+
+
+                <View style={styles.secaoCabecalho}>
+
+                    <Text style={styles.tituloSecao}>Seu espaço de cuidado</Text>
+
+                </View>
+
+                <Text style={styles.subtituloSecao}>Tudo o que você precisa, pertinho de você.</Text>
+
+
+
                 <View style={styles.grade}>
-                    <Pressable
-                        style={styles.card}
-                        onPress={() => router.push('/agenda')}
-                    >
-                        <View style={styles.iconeCard}>
-                            <Ionicons
-                                name="calendar-outline"
-                                size={27}
-                                color="#42A5D5"
-                            />
-                        </View>
+
+                    <Pressable style={[styles.card, styles.cardAzul]} onPress={() => router.push('/agenda')}>
+
+                        <View style={styles.iconeQuadradoAzul}><Ionicons name="calendar-outline" size={28} color="#42A5D5" /></View>
 
                         <Text style={styles.cardTitulo}>Agenda</Text>
 
-                        <Text style={styles.cardDescricao}>
-                            Veja seus compromissos
-                        </Text>
+                        <Text style={styles.cardDescricao}>Compromissos</Text>
+
                     </Pressable>
 
-                    <Pressable
-                        style={styles.card}
-                        onPress={() => router.push('/orientacoes')}
-                    >
-                        <View style={styles.iconeCard}>
-                            <Ionicons
-                                name="book-outline"
-                                size={21}
-                                color="#9AA7AD"
-                            />
-                        </View>
+                    <Pressable style={[styles.card, styles.cardRosa]} onPress={() => router.push('/orientacoes')}>
 
-                        <Text style={styles.cardTitulo}>
-                            Orientações
-                        </Text>
+                        <View style={styles.iconeQuadradoRosa}><Ionicons name="book-outline" size={28} color="#DE79A2" /></View>
 
-                        <Text style={styles.cardDescricao}>
-                            Conteúdos e informações
-                        </Text>
+                        <Text style={styles.cardTitulo}>Orientações</Text>
+
+                        <Text style={styles.cardDescricao}>Informações úteis</Text>
+
                     </Pressable>
 
-                    <Pressable
-                        style={styles.card}
-                        onPress={() => router.push('/atividades')}
-                    >
-                        <View style={styles.iconeCardRosa}>
-                            <Ionicons
-                                name="clipboard-outline"
-                                size={21}
-                                color="#9AA7AD"
-                            />
-                        </View>
+                    <Pressable style={[styles.card, styles.cardRosa]} onPress={() => router.push('/atividades')}>
 
-                        <Text style={styles.cardTitulo}>
-                            Atividades
-                        </Text>
+                        <View style={styles.iconeQuadradoRosa}><Ionicons name="journal-outline" size={28} color="#DE79A2" /></View>
 
-                        <Text style={styles.cardDescricao}>
-                            Acompanhe o dia a dia
-                        </Text>
+                        <Text style={styles.cardTitulo}>Meu Diário</Text>
+
+                        <Text style={styles.cardDescricao}>Conquistas e momentos</Text>
+
                     </Pressable>
 
-                    <Pressable
-                        style={styles.card}
-                        onPress={() => router.push('/minha-crianca')}
-                    >
-                        <View style={styles.iconeCardRosa}>
-                            <Ionicons
-                                name="person-outline"
-                                size={27}
-                                color="#FF7FA3"
-                            />
-                        </View>
+                    <Pressable style={[styles.card, styles.cardAzul]} onPress={() => router.push('/minha-crianca')}>
 
-                        <Text style={styles.cardTitulo}>
-                            Minha Criança
-                        </Text>
+                        <View style={styles.iconeQuadradoAzul}><Ionicons name="people-outline" size={28} color="#42A5D5" /></View>
 
-                        <Text style={styles.cardDescricao}>
-                            Informações e acompanhamento
-                        </Text>
+                        <Text style={styles.cardTitulo}>Minha Criança</Text>
+
+                        <Text style={styles.cardDescricao}>Acompanhamento</Text>
+
                     </Pressable>
 
-                    <Pressable
-                        style={styles.cardComunidadeNovo}
-                        onPress={() => router.push('/comunidade')}
-                    >
-                        <View style={styles.iconeComunidade}>
-                            <Ionicons
-                                name="chatbubbles-outline"
-                                size={25}
-                                color="#42A5D5"
-                            />
-                        </View>
-
-                        <View style={styles.textoComunidade}>
-                            <Text style={styles.cardTituloComunidade}>
-                                Comunidade
-                            </Text>
-
-                            <Text style={styles.cardDescricaoComunidade}>
-                                Converse, compartilhe experiências e tire dúvidas
-                            </Text>
-                        </View>
-
-                        <Ionicons
-                            name="chevron-forward"
-                            size={20}
-                            color="#A8B6BC"
-                        />
-                    </Pressable>
                 </View>
 
 
+
+                <Pressable style={styles.comunidade} onPress={() => router.push('/comunidade')}>
+
+                    <View style={styles.comunidadeIcone}><Ionicons name="chatbubbles-outline" size={24} color="#42A5D5" /></View>
+
+                    <View style={styles.comunidadeTexto}>
+
+                        <Text style={styles.comunidadeTitulo}>Comunidade</Text>
+
+                        <Text style={styles.comunidadeDescricao}>Um espaço para compartilhar e acolher</Text>
+
+                    </View>
+
+                    <Ionicons name="arrow-forward" size={19} color="#42A5D5" />
+
+                </Pressable>
+
             </ScrollView>
 
-            {/* Navegação inferior */}
+
+
             <View style={styles.menuInferior}>
 
-                <Pressable style={styles.itemMenu}>
-                    <Ionicons
-                        name="home"
-                        size={22}
-                        color="#42A5D5"
-                    />
-                    <Text style={styles.menuTextoAtivo}>
-                        Início
-                    </Text>
+                <View style={styles.itemMenu}>
+
+                    <Ionicons name="home" size={22} color="#42A5D5" />
+
+                    <Text style={styles.menuTextoAtivo}>Início</Text>
+
+                </View>
+
+                <Pressable style={styles.itemMenu} onPress={() => router.push('/agenda')}>
+
+                    <Ionicons name="calendar-outline" size={22} color="#96A5AE" />
+
+                    <Text style={styles.menuTexto}>Agenda</Text>
+
                 </Pressable>
 
-                <Pressable
-                    style={styles.itemMenu}
-                    onPress={() => router.push('/agenda')}
-                >
-                    <Ionicons
-                        name="calendar-outline"
-                        size={22}
-                        color="#8B979C"
-                    />
-                    <Text style={styles.menuTexto}>
-                        Agenda
-                    </Text>
+                <Pressable style={styles.itemMenu} onPress={() => router.push('/atividades')}>
+
+                    <Ionicons name="journal-outline" size={22} color="#96A5AE" />
+
+                    <Text style={styles.menuTexto}>Diário</Text>
+
                 </Pressable>
 
-                <Pressable
-                    style={styles.itemMenu}
-                    onPress={() => router.push('/atividades')}
-                >
-                    <Ionicons
-                        name="clipboard-outline"
-                        size={22}
-                        color="#8B979C"
-                    />
-                    <Text style={styles.menuTexto}>
-                        Atividades
-                    </Text>
+                <Pressable style={styles.itemMenu} onPress={() => router.push('/orientacoes')}>
+
+                    <Ionicons name="book-outline" size={22} color="#96A5AE" />
+
+                    <Text style={styles.menuTexto}>Orientações</Text>
+
                 </Pressable>
 
-                <Pressable
-                    style={styles.itemMenu}
-                    onPress={() => router.push('/orientacoes')}
-                >
-                    <Ionicons
-                        name="book-outline"
-                        size={22}
-                        color="#8B979C"
-                    />
-                    <Text style={styles.menuTexto}>
-                        Orientações
-                    </Text>
-                </Pressable>
-                <Pressable
-                    style={styles.itemMenu}
-                    onPress={() => router.push('/comunidade')}
-                >
-                    <Ionicons
-                        name="chatbubbles-outline"
-                        size={22}
-                        color="#8B979C"
-                    />
+                <Pressable style={styles.itemMenu} onPress={() => router.push('/comunidade')}>
 
-                    <Text style={styles.menuTexto}>
-                        Comunidade
-                    </Text>
+                    <Ionicons name="chatbubbles-outline" size={22} color="#96A5AE" />
+
+                    <Text style={styles.menuTexto}>Comunidade</Text>
+
                 </Pressable>
+
             </View>
+
         </SafeAreaView>
+
     );
+
 }
 
+
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F9FCFD',
-    },
 
-    conteudo: {
-        paddingHorizontal: 18,
-        paddingBottom: 115,
-    },
+    container: { flex: 1, backgroundColor: '#F9FCFD' },
 
-    cabecalho: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 8,
-        marginBottom: 25,
-    },
+    fundoDecorativo: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, overflow: 'hidden' },
 
-    menu: {
-        fontSize: 24,
-        color: '#427DA1',
-    },
+    rosaTopo: { position: 'absolute', top: -115, left: -125, width: 310, height: 260, borderRadius: 150, backgroundColor: '#FCEAF1', transform: [{ rotate: '-20deg' }] },
 
-    logoArea: {
-        alignItems: 'center',
-    },
+    azulTopo: { position: 'absolute', top: -125, right: -145, width: 330, height: 255, borderRadius: 150, backgroundColor: '#E4F5FC', transform: [{ rotate: '17deg' }] },
 
-    logo: {
-        fontSize: 25,
-        fontWeight: '800',
-    },
+    rosaBaixo: { position: 'absolute', bottom: -150, left: -150, width: 330, height: 260, borderRadius: 160, backgroundColor: '#FCEAF1' },
 
-    logoRosa: {
-        color: '#FF7FA3',
-    },
+    azulBaixo: { position: 'absolute', bottom: -145, right: -145, width: 340, height: 260, borderRadius: 160, backgroundColor: '#E4F5FC' },
 
-    logoAzul: {
-        color: '#42A5D5',
-    },
+    conteudo: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 120 },
 
-    slogan: {
-        color: '#7A858B',
-        fontSize: 9,
-        marginTop: 2,
-    },
+    cabecalho: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30 },
 
-    boasVindas: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 25,
-    },
+    acaoCabecalho: { width: 42, alignItems: 'center' },
 
-    avatar: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 14,
-    },
+    botaoCabecalho: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FFFFFFDD', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#EDF3F6' },
 
+    logoArea: { alignItems: 'center' },
 
+    logo: { fontSize: 28, fontWeight: '800' },
 
-    boasVindasTexto: {
-        flex: 1,
-    },
+    logoRosa: { color: '#FF7FA3' },
 
-    ola: {
-        color: '#3E4850',
-        fontSize: 20,
-        fontWeight: '700',
-    },
+    logoAzul: { color: '#42A5D5' },
 
-    mensagem: {
-        color: '#68747A',
-        fontSize: 13,
-        marginTop: 5,
-    },
-    proximoCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 18,
-        padding: 16,
-        marginBottom: 20,
-    },
+    slogan: { marginTop: 3, fontSize: 10, color: '#7A8C95' },
 
-    proximoTitulo: {
-        color: '#427DA1',
-        fontSize: 13,
-        fontWeight: '700',
+    saudacao: { flexDirection: 'row', alignItems: 'center', marginBottom: 26, paddingHorizontal: 3 },
 
-    },
+    avatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#EAF7FC', alignItems: 'center', justifyContent: 'center', marginRight: 14, overflow: 'hidden', borderWidth: 3, borderColor: '#FFFFFF' },
 
-    proximoNome: {
-        color: '#3E4850',
-        fontSize: 16,
-        fontWeight: '700',
-    },
+    fotoPerfil: { width: '100%', height: '100%', borderRadius: 31 },
 
-    proximoDetalhe: {
-        color: '#68747A',
-        fontSize: 12,
-        marginTop: 5,
-    },
-    tituloSecao: {
-        color: '#48545A',
-        fontSize: 15,
-        fontWeight: '700',
-        marginBottom: 12,
-    },
+    saudacaoTexto: { flex: 1 },
 
-    grade: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-    },
+    ola: { color: '#30475D', fontSize: 21, fontWeight: '700' },
 
-    card: {
-        width: '48%',
-        minHeight: 150,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-        padding: 18,
-        marginBottom: 14,
-        alignItems: 'flex-start',
-        justifyContent: 'center',
+    coracao: { color: '#FF7FA3', fontSize: 23 },
 
-        shadowColor: '#355C6D',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.06,
-        shadowRadius: 10,
-        elevation: 2,
-    },
-    iconeCard: {
-        width: 46,
-        height: 46,
-        borderRadius: 15,
-        backgroundColor: '#EAF7FC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-    },
+    mensagem: { marginTop: 5, color: '#7F919C', fontSize: 12 },
 
-    iconeCardRosa: {
-        width: 46,
-        height: 46,
-        borderRadius: 15,
-        backgroundColor: '#FFF0F5',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-    },
+    compromissoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF0F5', borderRadius: 22, padding: 17, marginBottom: 30, borderWidth: 1, borderColor: '#FCE1EB' },
 
-    cardComunidadeNovo: {
-        width: '100%',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-        paddingVertical: 17,
-        paddingHorizontal: 18,
-        marginTop: 2,
-        marginBottom: 18,
+    compromissoIcone: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#FFE0EB', alignItems: 'center', justifyContent: 'center', marginRight: 13 },
 
-        flexDirection: 'row',
-        alignItems: 'center',
+    compromissoTexto: { flex: 1 },
 
-        shadowColor: '#355C6D',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.06,
-        shadowRadius: 10,
-        elevation: 2,
-    },
+    compromissoLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: '#D5779B', marginBottom: 5 },
 
-    iconeComunidade: {
-        width: 48,
-        height: 48,
-        borderRadius: 16,
-        backgroundColor: '#EAF7FC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 14,
-    },
+    compromissoNome: { fontSize: 15, fontWeight: '700', color: '#30475D' },
 
-    textoComunidade: {
-        flex: 1,
-    },
+    compromissoDetalhe: { marginTop: 5, fontSize: 11, color: '#8496A0' },
 
-    cardTituloComunidade: {
-        color: '#3E4C54',
-        fontSize: 15,
-        fontWeight: '700',
-    },
+    secaoCabecalho: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
-    cardDescricaoComunidade: {
-        color: '#89969C',
-        fontSize: 10,
-        lineHeight: 15,
-        marginTop: 4,
-        paddingRight: 8,
-    },
+    tituloSecao: { fontSize: 19, fontWeight: '700', color: '#30475D' },
 
+    subtituloSecao: { fontSize: 12, color: '#8798A3', marginTop: 5, marginBottom: 18 },
 
-    cardTitulo: {
-        color: '#3E4C54',
-        fontSize: 15,
-        fontWeight: '700',
-    },
+    grade: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
 
-    cardDescricao: {
-        color: '#89969C',
-        fontSize: 10,
-        marginTop: 5,
-        lineHeight: 14,
-    },
+    card: { width: '48%', height: 145, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginBottom: 13, paddingHorizontal: 8 },
+
+    cardAzul: { backgroundColor: '#EAF7FC' },
+
+    cardRosa: { backgroundColor: '#FFF0F5' },
+
+    iconeQuadradoAzul: { marginBottom: 13 },
+
+    iconeQuadradoRosa: { marginBottom: 13 },
+
+    cardTitulo: { fontSize: 14, fontWeight: '700', color: '#30475D', textAlign: 'center' },
+
+    cardDescricao: { fontSize: 10, color: '#81939E', textAlign: 'center', marginTop: 5 },
+
+    comunidade: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    backgroundColor: '#EAF7FC',
+
+    borderRadius: 21,
+
+    padding: 16,
+
+    marginTop: 7,
+
+    borderWidth: 1,
+
+    borderColor: '#D8EFF9',
+
+},
+
+    comunidadeIcone: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#EAF7FC', alignItems: 'center', justifyContent: 'center', marginRight: 13 },
+
+    comunidadeTexto: { flex: 1 },
+
+    comunidadeTitulo: { color: '#30475D', fontSize: 14, fontWeight: '700' },
+
+    comunidadeDescricao: { color: '#8798A3', fontSize: 11, marginTop: 4, lineHeight: 16 },
+
+    fraseFinal: { textAlign: 'center', color: '#C183A1', fontSize: 12, marginTop: 25 },
+
+    menuInferior: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 76, backgroundColor: '#FFFFFF', borderTopLeftRadius: 26, borderTopRightRadius: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 7, borderTopWidth: 1, borderColor: '#EDF3F6', elevation: 5, shadowColor: '#355C6D', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.05, shadowRadius: 10 },
+
+    itemMenu: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+   menuTexto: {
+
+    color: '#94A2AC',
+
+    fontSize: 10,
+
+    marginTop: 5,
+
+},
 
 
 
-    menuInferior: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 88,
-        backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: 25,
-        borderTopRightRadius: 25,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
+menuTextoAtivo: {
 
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: -2,
-        },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-        elevation: 8,
-    },
+    color: '#42A5D5',
 
-    itemMenu: {
-        flex: 1,
-        alignItems: 'center',
-    },
+    fontSize: 10,
 
+    fontWeight: '700',
 
+    marginTop: 5,
 
-
-
-    menuTexto: {
-        color: '#8B979C',
-        fontSize: 9,
-        marginTop: 4,
-    },
-
-    menuTextoAtivo: {
-        color: '#42A5D5',
-        fontSize: 9,
-        fontWeight: '700',
-        marginTop: 4,
-    },
-    fotoPerfil: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 50,
-    },
-    proximoCabecalho: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 7,
-        marginBottom: 9,
-    },
-    decoracaoFundo: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        overflow: 'hidden',
-    },
-
-    manchaRosaTopo: {
-        position: 'absolute',
-        width: 270,
-        height: 210,
-        borderRadius: 140,
-        backgroundColor: '#FFE8F0',
-        top: -105,
-        left: -85,
-        opacity: 0.85,
-    },
-
-    manchaAzulTopo: {
-        position: 'absolute',
-        width: 290,
-        height: 210,
-        borderRadius: 150,
-        backgroundColor: '#E2F5FC',
-        top: -115,
-        right: -100,
-        opacity: 0.9,
-    },
-
-    manchaRosaBaixo: {
-        position: 'absolute',
-        width: 350,
-        height: 230,
-        borderRadius: 180,
-        backgroundColor: '#FFE5EE',
-        bottom: -110,
-        left: -130,
-        opacity: 0.8,
-    },
-
-    manchaAzulBaixo: {
-        position: 'absolute',
-        width: 360,
-        height: 230,
-        borderRadius: 190,
-        backgroundColor: '#DCF3FC',
-        bottom: -120,
-        right: -150,
-        opacity: 0.85,
-    },
+},
 
 });

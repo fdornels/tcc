@@ -1,866 +1,226 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../../config/firebase';
 
-import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from 'react-native';
-
-import { SafeAreaView } from 'react-native-safe-area-context';
-
 type Orientacao = {
-    id: string;
-    titulo: string;
-    categoria: string;
-    icone: string;
-    introducao?: string;
-    dicas?: string[];
-    lembrete?: string;
+  id: string;
+  titulo: string;
+  categoria: string;
+  icone?: string;
+  introducao?: string;
+  dicas?: string[];
+  lembrete?: string;
 };
 
+type NomeIcone = React.ComponentProps<typeof Ionicons>['name'];
+const ROSA = '#FF7FA3';
+const AZUL = '#42A5D5';
+const TEXTO = '#334A5F';
+const categorias: { nome: string; descricao: string; icone: NomeIcone; cor: string; fundo: string }[] = [
+  { nome: 'Crise Sensorial', descricao: 'Acolhimento e estratégias', icone: 'options-outline', cor: AZUL, fundo: '#EAF7FC' },
+  { nome: 'Comunicação', descricao: 'Conexão e expressão', icone: 'chatbubble-ellipses-outline', cor: ROSA, fundo: '#FFF0F5' },
+  { nome: 'Rotinas', descricao: 'Organização do dia a dia', icone: 'time-outline', cor: AZUL, fundo: '#EAF7FC' },
+  { nome: 'Direitos', descricao: 'Informações e benefícios', icone: 'document-text-outline', cor: ROSA, fundo: '#FFF0F5' },
+];
 
+function iconeCategoria(categoria: string): NomeIcone {
+  return categorias.find((item) => item.nome === categoria)?.icone ?? 'book-outline';
+}
 
 export default function OrientacoesScreen() {
-    const [busca, setBusca] = useState('');
-    const [orientacoes, setOrientacoes] = useState<Orientacao[]>([]);
+  const [busca, setBusca] = useState('');
+  const [orientacoes, setOrientacoes] = useState<Orientacao[]>([]);
+  const [carregando, setCarregando] = useState(true);
 
-    async function carregarOrientacoes() {
-        try {
-            const resultado = await getDocs(
-                collection(db, 'orientacoes')
-            );
-
-            const lista: Orientacao[] = resultado.docs.map(
-                (documento) => ({
-                    id: documento.id,
-                    ...(documento.data() as Omit<Orientacao, 'id'>),
-                })
-            );
-
-            setOrientacoes(lista);
-
-            console.log(
-                'ORIENTAÇÕES DO FIREBASE:',
-                lista.length
-            );
-        } catch (erro) {
-            console.log(
-                'Erro ao carregar orientações:',
-                erro
-            );
-
-            Alert.alert(
-                'Erro',
-                'Não foi possível carregar as orientações.'
-            );
-        }
+  useFocusEffect(useCallback(() => {
+    let ativo = true;
+    async function carregar() {
+      try {
+        const resultado = await getDocs(collection(db, 'orientacoes'));
+        if (ativo) setOrientacoes(resultado.docs.map((documento) => ({
+          id: documento.id,
+          ...(documento.data() as Omit<Orientacao, 'id'>),
+        })));
+      } catch (erro) {
+        console.log('Erro ao carregar orientações:', erro);
+        if (ativo) Alert.alert('Erro', 'Não foi possível carregar as orientações.');
+      } finally {
+        if (ativo) setCarregando(false);
+      }
     }
-    useFocusEffect(
-        useCallback(() => {
-            carregarOrientacoes();
-        }, [])
-    );
+    setCarregando(true);
+    carregar();
+    return () => { ativo = false; };
+  }, []));
 
-    const textoBusca = busca.trim().toLowerCase();
+  const textoBusca = busca.trim().toLocaleLowerCase('pt-BR');
+  const pesquisando = textoBusca.length > 0;
+  const resultados = useMemo(() => orientacoes.filter((item) => {
+    const conteudo = [item.titulo, item.introducao, item.categoria, ...(item.dicas ?? []), item.lembrete]
+      .filter(Boolean).join(' ').toLocaleLowerCase('pt-BR');
+    return conteudo.includes(textoBusca);
+  }), [orientacoes, textoBusca]);
 
-    const resultados = orientacoes.filter((item) => {
-        const titulo =
-            item.titulo?.toLowerCase() ?? '';
+  function abrirOrientacao(id: string) {
+    router.push({ pathname: '/orientacao-detalhes', params: { id } });
+  }
 
-        const introducao =
-            item.introducao?.toLowerCase() ?? '';
+  return (
+    <SafeAreaView style={styles.container}>
+      <View pointerEvents="none" style={styles.decoracao}>
+        <View style={styles.bolaRosa} />
+        <View style={styles.bolaAzul} />
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.conteudo}>
+        <View style={styles.cabecalho}>
+          <Pressable style={styles.voltar} onPress={() => router.back()} accessibilityLabel="Voltar">
+            <Ionicons name="chevron-back" size={22} color={ROSA} />
+          </Pressable>
+          <Text style={styles.titulo}>Orientações</Text>
+          <View style={styles.espaco} />
+        </View>
 
-        const categoria =
-            item.categoria?.toLowerCase() ?? '';
+        <View style={styles.introducao}>
+          <View style={styles.introducaoIcone}><Ionicons name="book-outline" size={22} color={ROSA} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.introducaoTitulo}>Informação que acolhe</Text>
+            <Text style={styles.introducaoTexto}>Encontre orientações para diferentes momentos da rotina.</Text>
+          </View>
+        </View>
 
-        const dicas =
-            item.dicas?.join(' ').toLowerCase() ?? '';
+        <View style={styles.busca}>
+          <Ionicons name="search-outline" size={19} color={AZUL} />
+          <TextInput
+            style={styles.inputBusca}
+            placeholder="Buscar orientações..."
+            placeholderTextColor="#96A5AF"
+            value={busca}
+            onChangeText={setBusca}
+            returnKeyType="search"
+          />
+          {pesquisando && (
+            <Pressable onPress={() => setBusca('')} style={styles.limpar} accessibilityLabel="Limpar busca">
+              <Ionicons name="close-circle" size={19} color="#9AAAB3" />
+            </Pressable>
+          )}
+        </View>
 
-        const lembrete =
-            item.lembrete?.toLowerCase() ?? '';
-
-        return (
-            titulo.includes(textoBusca) ||
-            introducao.includes(textoBusca) ||
-            categoria.includes(textoBusca) ||
-            dicas.includes(textoBusca) ||
-            lembrete.includes(textoBusca)
-        );
-    });
-
-    const pesquisando = textoBusca.length > 0;
-
-    function abrirOrientacao(id: string) {
-        router.push({
-            pathname: '/orientacao-detalhes',
-            params: {
-                id,
-            },
-        });
-    }
-    return (
-        <SafeAreaView style={styles.container}>
-            <View pointerEvents="none" style={styles.decoracaoFundo}>
-                <View style={styles.manchaRosaTopo} />
-                <View style={styles.manchaAzulTopo} />
-                <View style={styles.manchaRosaBaixo} />
-                <View style={styles.manchaAzulBaixo} />
+        {pesquisando ? (
+          <>
+            <View style={styles.linhaTitulo}>
+              <Text style={styles.tituloSecao}>Resultados</Text>
+              <Text style={styles.contador}>{resultados.length} encontrado{resultados.length === 1 ? '' : 's'}</Text>
             </View>
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.conteudo}
-            >
-                {/* Cabeçalho */}
-                <View style={styles.cabecalho}>
-                    <Pressable
-                        style={styles.botaoVoltar}
-                        onPress={() => router.back()}
-                    >
-                        <Ionicons
-                            name="chevron-back"
-                            size={22}
-                            color="#42A5D5"
-                        />
-                    </Pressable>
-
-                    <Text style={styles.titulo}>Orientações</Text>
-
-                    <View style={styles.espacoCabecalho} />
+            {resultados.length === 0 ? (
+              <View style={styles.vazio}>
+                <Ionicons name="search-outline" size={27} color={AZUL} />
+                <Text style={styles.vazioTitulo}>Nenhuma orientação encontrada</Text>
+                <Text style={styles.vazioTexto}>Tente pesquisar por outro termo.</Text>
+              </View>
+            ) : resultados.map((item, index) => (
+              <Pressable key={item.id} style={styles.cardOrientacao} onPress={() => abrirOrientacao(item.id)}>
+                <View style={[styles.iconeCard, { backgroundColor: index % 2 === 0 ? '#EAF7FC' : '#FFF0F5' }]}>
+                  <Ionicons name={iconeCategoria(item.categoria)} size={22} color={index % 2 === 0 ? AZUL : ROSA} />
                 </View>
-
-                {/* Busca */}
-                <View style={styles.busca}>
-                    <Ionicons
-                        name="search-outline"
-                        size={19}
-                        color="#42A5D5"
-                    />
-
-                    <TextInput
-                        style={styles.inputBusca}
-                        placeholder="Buscar orientações..."
-                        placeholderTextColor="#9AA6AB"
-                        value={busca}
-                        onChangeText={setBusca}
-                        returnKeyType="search"
-                    />
-
-                    {pesquisando && (
-                        <Pressable
-                            style={styles.botaoLimpar}
-                            onPress={() => setBusca('')}
-                        >
-                            <Text style={styles.textoLimpar}>×</Text>
-                        </Pressable>
-                    )}
+                <View style={styles.infoCard}>
+                  <Text style={styles.categoriaCard}>{item.categoria}</Text>
+                  <Text style={styles.nomeCard} numberOfLines={2}>{item.titulo}</Text>
+                  <Text style={styles.resumoCard} numberOfLines={2}>{item.introducao || 'Toque para conhecer esta orientação.'}</Text>
                 </View>
+                <Ionicons name="chevron-forward" size={17} color="#A4B3BD" />
+              </Pressable>
+            ))}
+          </>
+        ) : (
+          <>
+            <Text style={styles.tituloSecao}>Explore por categoria</Text>
+            <View style={styles.grade}>
+              {categorias.map((categoria) => (
+                <Pressable
+                  key={categoria.nome}
+                  style={[styles.cardCategoria, { backgroundColor: categoria.fundo }]}
+                  onPress={() => router.push({ pathname: '/lista-orientacoes', params: { categoria: categoria.nome } })}
+                >
+                  <View style={styles.linhaCategoria}>
+                    <View style={styles.iconeCategoria}><Ionicons name={categoria.icone} size={21} color={categoria.cor} /></View>
+                    <Ionicons name="arrow-forward-outline" size={14} color={categoria.cor} />
+                  </View>
+                  <Text style={styles.nomeCategoria}>{categoria.nome}</Text>
+                  <Text style={styles.descricaoCategoria} numberOfLines={2}>{categoria.descricao}</Text>
+                </Pressable>
+              ))}
+            </View>
 
-                {/* RESULTADOS DA BUSCA */}
-                {pesquisando ? (
-                    <>
-                        <View style={styles.cabecalhoResultados}>
-                            <Text style={styles.tituloSecao}>
-                                Resultados
-                            </Text>
-
-                            <Text style={styles.quantidadeResultados}>
-                                {resultados.length}{' '}
-                                {resultados.length === 1
-                                    ? 'encontrado'
-                                    : 'encontrados'}
-                            </Text>
-                        </View>
-
-                        {resultados.length === 0 ? (
-                            <View style={styles.semResultados}>
-                                <Text style={styles.emojiSemResultados}>
-                                    🔎
-                                </Text>
-
-                                <Text style={styles.tituloSemResultados}>
-                                    Nenhuma orientação encontrada
-                                </Text>
-
-                                <Text style={styles.textoSemResultados}>
-                                    Tente pesquisar por outro termo.
-                                </Text>
-                            </View>
-                        ) : (
-                            <View style={styles.listaResultados}>
-                                {resultados.map((item) => (
-                                    <Pressable
-                                        key={item.id}
-                                        style={styles.cardResultado}
-                                        onPress={() =>
-                                            abrirOrientacao(item.id)
-                                        }
-                                    >
-                                        <View style={styles.iconeResultado}>
-                                            <Ionicons
-                                                name={
-                                                    item.categoria === 'Crise Sensorial'
-                                                        ? 'options-outline'
-                                                        : item.categoria === 'Comunicação'
-                                                            ? 'chatbubble-ellipses-outline'
-                                                            : item.categoria === 'Rotinas'
-                                                                ? 'time-outline'
-                                                                : item.categoria === 'Direitos'
-                                                                    ? 'document-text-outline'
-                                                                    : 'document-text-outline'
-                                                }
-                                                size={25}
-                                                color="#42A5D5"
-                                            />
-                                        </View>
-
-                                        <View style={styles.textoResultado}>
-                                            <Text style={styles.categoriaResultado}>
-                                                {item.categoria}
-                                            </Text>
-
-                                            <Text style={styles.tituloResultado}>
-                                                {item.titulo}
-                                            </Text>
-
-                                            <Text
-                                                style={styles.descricaoResultado}
-                                                numberOfLines={2}
-                                            >
-                                                {item.introducao ||
-                                                    'Toque para visualizar esta orientação.'}
-                                            </Text>
-
-                                            <Text style={styles.lerMais}>
-                                                Ler orientação ›
-                                            </Text>
-                                        </View>
-                                    </Pressable>
-                                ))}
-                            </View>
-                        )}
-                    </>
-                ) : (
-                    <>
-                        {/* Categorias */}
-                        <Text style={styles.tituloSecao}>
-                            Categorias
-                        </Text>
-
-                        <View style={styles.grade}>
-                            <Pressable
-                                style={[
-                                    styles.cardCategoria,
-                                    styles.azul,
-                                ]}
-                                onPress={() =>
-                                    router.push({
-                                        pathname: '/lista-orientacoes',
-                                        params: {
-                                            categoria: 'Crise Sensorial',
-                                        },
-                                    })
-                                }
-                            >
-                                <View style={styles.iconeCategoriaAzul}>
-                                    <Ionicons
-                                        name="options-outline"
-                                        size={24}
-                                        color="#42A5D5"
-                                    />
-                                </View>
-
-                                <Text style={styles.nomeCategoria}>
-                                    Crise Sensorial
-                                </Text>
-
-                                <Text style={styles.descricaoCategoria}>
-                                    Estratégias e dicas para momentos
-                                    desafiadores
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                style={[
-                                    styles.cardCategoria,
-                                    styles.amarelo,
-                                ]}
-                                onPress={() =>
-                                    router.push({
-                                        pathname: '/lista-orientacoes',
-                                        params: {
-                                            categoria: 'Comunicação',
-                                        },
-                                    })
-                                }
-                            >
-                                <View style={styles.iconeCategoriaRosa}>
-                                    <Ionicons
-                                        name="chatbubble-ellipses-outline"
-                                        size={24}
-                                        color="#FF7FA3"
-                                    />
-                                </View>
-
-                                <Text style={styles.nomeCategoria}>
-                                    Comunicação
-                                </Text>
-
-                                <Text style={styles.descricaoCategoria}>
-                                    Apoio no desenvolvimento da comunicação
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                style={[
-                                    styles.cardCategoria,
-                                    styles.verde,
-                                ]}
-                                onPress={() =>
-                                    router.push({
-                                        pathname: '/lista-orientacoes',
-                                        params: {
-                                            categoria: 'Rotinas',
-                                        },
-                                    })
-                                }
-                            >
-                                <View style={styles.iconeCategoriaAzul}>
-                                    <Ionicons
-                                        name="time-outline"
-                                        size={24}
-                                        color="#42A5D5"
-                                    />
-                                </View>
-
-                                <Text style={styles.nomeCategoria}>
-                                    Rotinas
-                                </Text>
-
-                                <Text style={styles.descricaoCategoria}>
-                                    Organização e estrutura no dia a dia
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                style={[
-                                    styles.cardCategoria,
-                                    styles.roxo,
-                                ]}
-                                onPress={() =>
-                                    router.push({
-                                        pathname: '/lista-orientacoes',
-                                        params: {
-                                            categoria: 'Direitos',
-                                        },
-                                    })
-                                }
-                            >
-                                <View style={styles.iconeCategoriaRosa}>
-                                    <Ionicons
-                                        name="document-text-outline"
-                                        size={24}
-                                        color="#FF7FA3"
-                                    />
-                                </View>
-
-                                <Text style={styles.nomeCategoria}>
-                                    Direitos
-                                </Text>
-
-                                <Text style={styles.descricaoCategoria}>
-                                    Informações sobre direitos e benefícios
-                                </Text>
-                            </Pressable>
-                        </View>
-
-                        {/* Destaques */}
-                        <Text style={styles.tituloSecao}>
-                            Destaques
-                        </Text>
-                        {orientacoes.map((item, index) => (
-                            <Pressable
-                                key={item.id}
-                                style={styles.cardDestaque}
-                                onPress={() => abrirOrientacao(item.id)}
-                            >
-                                <View
-                                    style={[
-                                        styles.imagemDestaque,
-                                        index % 2 === 0
-                                            ? styles.destaqueAzul
-                                            : styles.destaqueRosa,
-                                    ]}
-                                >
-                                    <Ionicons
-                                        name={
-                                            item.categoria === 'Crise Sensorial'
-                                                ? 'options-outline'
-                                                : item.categoria === 'Comunicação'
-                                                    ? 'chatbubble-ellipses-outline'
-                                                    : item.categoria === 'Rotinas'
-                                                        ? 'time-outline'
-                                                        : item.categoria === 'Direitos'
-                                                            ? 'document-text-outline'
-                                                            : 'document-text-outline'
-                                        }
-                                        size={27}
-                                        color={index % 2 === 0 ? '#42A5D5' : '#FF7FA3'}
-                                    />
-                                </View>
-
-                                <View style={styles.textoDestaque}>
-                                    <Text style={styles.tituloDestaque}>
-                                        {item.titulo}
-                                    </Text>
-
-                                    <Text
-                                        style={styles.descricaoDestaque}
-                                        numberOfLines={2}
-                                    >
-                                        {item.introducao ||
-                                            'Toque para visualizar esta orientação.'}
-                                    </Text>
-
-                                    <Text style={styles.lerMais}>
-                                        Ler orientação ›
-                                    </Text>
-                                </View>
-                            </Pressable>
-                        ))}
-
-
-                    </>
-                )}
-            </ScrollView>
-
-
-        </SafeAreaView>
-    );
+            <View style={styles.linhaTitulo}>
+              <Text style={styles.tituloSecao}>Orientações disponíveis</Text>
+              <Text style={styles.contador}>{orientacoes.length}</Text>
+            </View>
+            {carregando ? (
+              <Text style={styles.mensagem}>Carregando orientações...</Text>
+            ) : orientacoes.length === 0 ? (
+              <View style={styles.vazio}>
+                <Ionicons name="book-outline" size={27} color={AZUL} />
+                <Text style={styles.vazioTitulo}>Nenhuma orientação cadastrada</Text>
+                <Text style={styles.vazioTexto}>As orientações aparecerão aqui quando forem publicadas.</Text>
+              </View>
+            ) : orientacoes.map((item, index) => (
+              <Pressable key={item.id} style={styles.cardOrientacao} onPress={() => abrirOrientacao(item.id)}>
+                <View style={[styles.iconeCard, { backgroundColor: index % 2 === 0 ? '#EAF7FC' : '#FFF0F5' }]}>
+                  <Ionicons name={iconeCategoria(item.categoria)} size={22} color={index % 2 === 0 ? AZUL : ROSA} />
+                </View>
+                <View style={styles.infoCard}>
+                  <Text style={styles.categoriaCard}>{item.categoria}</Text>
+                  <Text style={styles.nomeCard} numberOfLines={2}>{item.titulo}</Text>
+                  <Text style={styles.resumoCard} numberOfLines={2}>{item.introducao || 'Toque para conhecer esta orientação.'}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color="#A4B3BD" />
+              </Pressable>
+            ))}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F9FCFD',
-    },
-
-    conteudo: {
-        paddingHorizontal: 18,
-        paddingBottom: 125,
-    },
-
-    cabecalho: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 7,
-        marginBottom: 20,
-    },
-    espacoCabecalho: {
-        width: 36,
-        height: 36,
-    },
-
-    botaoVoltar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
-    seta: {
-        color: '#4288AF',
-        fontSize: 30,
-        lineHeight: 31,
-    },
-
-    titulo: {
-        color: '#40515A',
-        fontSize: 20,
-        fontWeight: '700',
-    },
-
-    estrela: {
-        color: '#FFD447',
-        fontSize: 31,
-    },
-
-    busca: {
-        height: 48,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 15,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 14,
-        marginBottom: 22,
-    },
-
-    iconeBusca: {
-        color: '#42A5D5',
-        fontSize: 22,
-        marginRight: 8,
-    },
-
-    inputBusca: {
-        flex: 1,
-        color: '#46545B',
-        fontSize: 13,
-    },
-
-    botaoLimpar: {
-        width: 30,
-        height: 30,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
-    textoLimpar: {
-        color: '#9AA6AB',
-        fontSize: 25,
-        lineHeight: 27,
-    },
-
-    tituloSecao: {
-        color: '#445158',
-        fontSize: 16,
-        fontWeight: '700',
-        marginBottom: 12,
-    },
-
-    grade: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        marginBottom: 18,
-    },
-
-    cardCategoria: {
-        width: '48%',
-        minHeight: 145,
-        borderRadius: 19,
-        padding: 14,
-        marginBottom: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    iconeCategoriaAzul: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        backgroundColor: '#EAF7FC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 10,
-    },
-    iconeCategoriaRosa: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        backgroundColor: '#FFEAF0',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 10,
-    },
-    azul: {
-        backgroundColor: '#EDF8FC',
-    },
-
-    amarelo: {
-        backgroundColor: '#FFF0F5',
-    },
-
-    verde: {
-        backgroundColor: '#EDF8FC',
-    },
-
-    roxo: {
-        backgroundColor: '#FFF0F5',
-    },
-
-    emoji: {
-        fontSize: 33,
-        marginBottom: 8,
-    },
-
-    nomeCategoria: {
-        color: '#46545B',
-        fontSize: 13,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
-
-    descricaoCategoria: {
-        color: '#77858B',
-        fontSize: 9,
-        lineHeight: 13,
-        textAlign: 'center',
-        marginTop: 5,
-    },
-
-    cardDestaque: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 9,
-        flexDirection: 'row',
-        marginBottom: 11,
-    },
-
-    imagemDestaque: {
-        width: 82,
-        height: 82,
-        borderRadius: 16,
-        backgroundColor: '#EAF7FC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    destaqueAzul: {
-        backgroundColor: '#EAF7FC',
-    },
-
-    destaqueRosa: {
-        backgroundColor: '#FFF0F5',
-    },
-    imagemRosa: {
-        backgroundColor: '#F8DDE6',
-    },
-
-    emojiDestaque: {
-        fontSize: 38,
-    },
-
-    textoDestaque: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-
-    tituloDestaque: {
-        color: '#46545B',
-        fontSize: 13,
-        fontWeight: '700',
-    },
-
-    descricaoDestaque: {
-        color: '#77858B',
-        fontSize: 10,
-        lineHeight: 14,
-        marginTop: 4,
-    },
-
-    lerMais: {
-        color: '#42A5D5',
-        fontSize: 10,
-        fontWeight: '700',
-        marginTop: 6,
-    },
-
-    cabecalhoResultados: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-
-    quantidadeResultados: {
-        color: '#42A5D5',
-        fontSize: 10,
-        marginBottom: 12,
-    },
-
-    listaResultados: {
-        gap: 11,
-    },
-
-    cardResultado: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 12,
-        flexDirection: 'row',
-        minHeight: 115,
-    },
-
-    iconeResultado: {
-        width: 62,
-        height: 62,
-        borderRadius: 17,
-        backgroundColor: '#EDF8FB',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-
-    emojiResultado: {
-        fontSize: 29,
-    },
-
-    textoResultado: {
-        flex: 1,
-    },
-
-    categoriaResultado: {
-        color: '#42A5D5',
-        fontSize: 9,
-        fontWeight: '700',
-        marginBottom: 3,
-    },
-
-    tituloResultado: {
-        color: '#46545B',
-        fontSize: 13,
-        fontWeight: '700',
-    },
-
-    descricaoResultado: {
-        color: '#77858B',
-        fontSize: 10,
-        lineHeight: 14,
-        marginTop: 4,
-    },
-
-    semResultados: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        paddingVertical: 32,
-        paddingHorizontal: 20,
-        alignItems: 'center',
-    },
-
-    emojiSemResultados: {
-        fontSize: 38,
-    },
-
-    tituloSemResultados: {
-        color: '#46545B',
-        fontSize: 14,
-        fontWeight: '700',
-        marginTop: 10,
-    },
-
-    textoSemResultados: {
-        color: '#929DA2',
-        fontSize: 11,
-        marginTop: 5,
-    },
-
-    decoracao: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        marginTop: 18,
-    },
-
-    decoracaoEmoji: {
-        fontSize: 31,
-    },
-
-    coracao: {
-        color: '#FF8FB1',
-        fontSize: 30,
-    },
-
-    menuInferior: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 88,
-        backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: 25,
-        borderTopRightRadius: 25,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        elevation: 8,
-    },
-
-    itemMenu: {
-        flex: 1,
-        alignItems: 'center',
-    },
-
-    menuIcone: {
-        color: '#8B979C',
-        fontSize: 22,
-    },
-
-    menuIconeAtivo: {
-        color: '#42A5D5',
-        fontSize: 22,
-        fontWeight: '700',
-    },
-
-    menuTexto: {
-        color: '#8B979C',
-        fontSize: 9,
-        marginTop: 4,
-    },
-
-    menuTextoAtivo: {
-        color: '#42A5D5',
-        fontSize: 9,
-        fontWeight: '700',
-        marginTop: 4,
-    },
-    decoracaoFundo: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        overflow: 'hidden',
-    },
-
-    manchaRosaTopo: {
-        position: 'absolute',
-        width: 270,
-        height: 210,
-        borderRadius: 140,
-        backgroundColor: '#FFE8F0',
-        top: -105,
-        left: -85,
-        opacity: 0.85,
-    },
-
-    manchaAzulTopo: {
-        position: 'absolute',
-        width: 290,
-        height: 210,
-        borderRadius: 150,
-        backgroundColor: '#E2F5FC',
-        top: -115,
-        right: -100,
-        opacity: 0.9,
-    },
-
-    manchaRosaBaixo: {
-        position: 'absolute',
-        width: 350,
-        height: 230,
-        borderRadius: 180,
-        backgroundColor: '#FFE5EE',
-        bottom: -110,
-        left: -130,
-        opacity: 0.8,
-    },
-
-    manchaAzulBaixo: {
-        position: 'absolute',
-        width: 360,
-        height: 230,
-        borderRadius: 190,
-        backgroundColor: '#DCF3FC',
-        bottom: -120,
-        right: -150,
-        opacity: 0.85,
-    },
+  container: { flex: 1, backgroundColor: '#F8FCFE' },
+  decoracao: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, overflow: 'hidden' },
+  bolaRosa: { position: 'absolute', width: 230, height: 160, borderRadius: 120, backgroundColor: '#FFE9F1', top: -85, left: -75 },
+  bolaAzul: { position: 'absolute', width: 240, height: 160, borderRadius: 125, backgroundColor: '#E4F6FC', top: -90, right: -90 },
+  conteudo: { paddingHorizontal: 20, paddingBottom: 45 },
+  cabecalho: { marginTop: 9, marginBottom: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  voltar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  espaco: { width: 36 },
+  titulo: { fontSize: 18, fontWeight: '700', color: TEXTO },
+  introducao: { backgroundColor: '#FFF1F6', borderRadius: 19, borderWidth: 1, borderColor: '#FFE4ED', padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 22 },
+  introducaoIcone: { width: 43, height: 43, borderRadius: 14, backgroundColor: '#FFE3ED', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  introducaoTitulo: { fontSize: 13, fontWeight: '700', color: TEXTO, marginBottom: 4 },
+  introducaoTexto: { fontSize: 11, lineHeight: 16, color: '#7E8F9B' },
+  busca: { height: 48, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E6F0F5', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, marginBottom: 24 },
+  inputBusca: { flex: 1, fontSize: 13, color: TEXTO, marginLeft: 9 },
+  limpar: { padding: 5 },
+  tituloSecao: { fontSize: 15, fontWeight: '700', color: TEXTO, marginBottom: 13 },
+  linhaTitulo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  contador: { fontSize: 12, color: AZUL, fontWeight: '700', marginBottom: 13 },
+  grade: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 15 },
+  cardCategoria: { width: '48.5%', minHeight: 118, borderRadius: 18, padding: 13, marginBottom: 10, justifyContent: 'space-between' },
+  linhaCategoria: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 },
+  iconeCategoria: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#FFFFFFAA', alignItems: 'center', justifyContent: 'center' },
+  nomeCategoria: { fontSize: 12, fontWeight: '700', color: TEXTO, marginBottom: 4 },
+  descricaoCategoria: { fontSize: 10, lineHeight: 14, color: '#7B8D98' },
+  cardOrientacao: { backgroundColor: '#FFFFFF', borderRadius: 17, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#EDF3F6' },
+  iconeCard: { width: 45, height: 45, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  infoCard: { flex: 1, paddingRight: 8 },
+  categoriaCard: { fontSize: 10, fontWeight: '600', color: AZUL, marginBottom: 3 },
+  nomeCard: { fontSize: 13, fontWeight: '700', color: TEXTO, marginBottom: 3 },
+  resumoCard: { fontSize: 11, lineHeight: 15, color: '#81919B' },
+  vazio: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 28, alignItems: 'center' },
+  vazioTitulo: { fontSize: 13, fontWeight: '700', color: TEXTO, marginTop: 10, textAlign: 'center' },
+  vazioTexto: { fontSize: 11, color: '#81919B', marginTop: 5, textAlign: 'center' },
+  mensagem: { color: '#81919B', fontSize: 12, textAlign: 'center', paddingVertical: 20 },
 });

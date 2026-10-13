@@ -1,3 +1,5 @@
+
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { useState } from 'react';
@@ -7,6 +9,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -42,10 +45,7 @@ export default function EsqueciSenhaScreen() {
         try {
             setCarregando(true);
 
-            await sendPasswordResetEmail(
-                auth,
-                emailLimpo
-            );
+            await sendPasswordResetEmail(auth, emailLimpo);
 
             Alert.alert(
                 'E-mail enviado! 💙',
@@ -53,16 +53,12 @@ export default function EsqueciSenhaScreen() {
                 [
                     {
                         text: 'Voltar ao login',
-                        onPress: () =>
-                            router.replace('/login'),
+                        onPress: () => router.replace('/login'),
                     },
                 ]
             );
         } catch (erro: any) {
-            console.log(
-                'Erro ao recuperar senha:',
-                erro
-            );
+            console.log('Erro ao recuperar senha:', erro);
 
             let mensagem =
                 'Não foi possível enviar o e-mail. Tente novamente.';
@@ -82,10 +78,7 @@ export default function EsqueciSenhaScreen() {
                     'Foram feitas muitas tentativas. Aguarde um pouco e tente novamente.';
             }
 
-            Alert.alert(
-                'Não foi possível enviar',
-                mensagem
-            );
+            Alert.alert('Não foi possível enviar', mensagem);
         } finally {
             setCarregando(false);
         }
@@ -93,254 +86,378 @@ export default function EsqueciSenhaScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            {/* Formas decorativas do fundo */}
+            <View pointerEvents="none" style={styles.fundoDecorativo}>
+                <View style={styles.formaRosaSuperior} />
+                <View style={styles.formaAzulSuperior} />
+                <View style={styles.formaRosaInferior} />
+                <View style={styles.formaAzulInferior} />
+            </View>
+
             <KeyboardAvoidingView
-                style={styles.content}
+                style={styles.flex}
                 behavior={
-                    Platform.OS === 'ios'
-                        ? 'padding'
-                        : undefined
+                    Platform.OS === 'ios' ? 'padding' : undefined
                 }
             >
-                <View style={styles.cabecalho}>
-                    <Pressable
-                        style={styles.botaoVoltar}
-                        onPress={() => router.back()}
-                    >
-                        <Text style={styles.seta}>‹</Text>
-                    </Pressable>
+                <ScrollView
+                    contentContainerStyle={styles.conteudo}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Cabeçalho */}
+                    <View style={styles.cabecalho}>
+                        <Pressable
+                            style={styles.botaoVoltar}
+                            onPress={() => router.back()}
+                        >
+                            <Ionicons
+                                name="chevron-back"
+                                size={24}
+                                color="#E46B98"
+                            />
+                        </Pressable>
 
-                    <Text style={styles.tituloCabecalho}>
-                        Recuperar senha
-                    </Text>
-
-                    <View style={styles.espacoCabecalho} />
-                </View>
-
-                <View style={styles.logoArea}>
-                    <Text style={styles.logo}>
-                        <Text style={styles.logoRosa}>
-                            (TE)
+                        <Text style={styles.tituloCabecalho}>
+                            Recuperar senha
                         </Text>
 
-                        <Text style={styles.logoAzul}>
-                            AJUDO
+                        <View style={styles.espacoCabecalho} />
+                    </View>
+
+
+                    {/* Card de apresentação */}
+                    <View style={styles.cardApresentacao}>
+                        <View style={styles.iconeApresentacao}>
+                            <Ionicons
+                                name="lock-closed-outline"
+                                size={30}
+                                color="#DB6D99"
+                            />
+                        </View>
+
+                        <View style={styles.textoApresentacao}>
+                            <Text style={styles.tituloApresentacao}>
+                                Esqueceu sua senha?
+                            </Text>
+
+                            <Text style={styles.descricaoApresentacao}>
+                                Não se preocupe! Vamos te ajudar a
+                                recuperar o acesso à sua conta.
+                            </Text>
+                        </View>
+
+                        <Ionicons
+                            name="heart-outline"
+                            size={23}
+                            color="#D879A0"
+                        />
+                    </View>
+
+                    {/* Formulário */}
+                    <View style={styles.cardFormulario}>
+                        <Text style={styles.tituloFormulario}>
+                            Redefinir senha
                         </Text>
-                    </Text>
 
-                    <Text style={styles.slogan}>
-                        Apoio à maternidade atípica
-                    </Text>
-
-                    <Text style={styles.coracao}>
-                        ♡
-                    </Text>
-                </View>
-
-                <View style={styles.card}>
-                    <Text style={styles.icone}>
-                        🔐
-                    </Text>
-
-                    <Text style={styles.titulo}>
-                        Esqueceu sua senha?
-                    </Text>
-
-                    <Text style={styles.descricao}>
-                        Informe o e-mail utilizado no
-                        cadastro. Enviaremos as instruções
-                        para você criar uma nova senha.
-                    </Text>
-
-                    <Text style={styles.label}>
-                        E-mail
-                    </Text>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Digite seu e-mail"
-                        placeholderTextColor="#9A9A9A"
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-
-                    />
-
-                    <Pressable
-                        style={[
-                            styles.botaoEnviar,
-                            carregando &&
-                            styles.botaoDesativado,
-                        ]}
-                        onPress={recuperarSenha}
-                        disabled={carregando}
-                    >
-                        <Text style={styles.textoBotao}>
-                            {carregando
-                                ? 'Enviando...'
-                                : 'Enviar instruções'}
+                        <Text style={styles.descricaoFormulario}>
+                            Informe o e-mail utilizado no cadastro.
+                            Enviaremos um link para você criar uma
+                            nova senha.
                         </Text>
-                    </Pressable>
 
-                    <Pressable
-                        onPress={() =>
-                            router.replace('/login')
-                        }
-                    >
-                        <Text style={styles.voltarLogin}>
-                            Voltar para o login
+                        <Text style={styles.label}>
+                            E-mail
                         </Text>
-                    </Pressable>
-                </View>
 
-                <View style={styles.decoracao}>
-                    <Text style={styles.arcoIris}>🌈</Text>
-                    <Text style={styles.infinito}>∞</Text>
-                    <Text style={styles.estrela}>★</Text>
-                </View>
+                        <View style={styles.campoEmail}>
+                            <Ionicons
+                                name="mail-outline"
+                                size={21}
+                                color="#42A5D5"
+                            />
+
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Digite seu e-mail"
+                                placeholderTextColor="#9BAAB4"
+                                value={email}
+                                onChangeText={setEmail}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                autoComplete="email"
+                            />
+                        </View>
+
+                        <Pressable
+                            style={[
+                                styles.botaoEnviar,
+                                carregando && styles.botaoDesativado,
+                            ]}
+                            onPress={recuperarSenha}
+                            disabled={carregando}
+                        >
+                            <Text style={styles.textoBotao}>
+                                {carregando
+                                    ? 'Enviando...'
+                                    : 'Enviar instruções'}
+                            </Text>
+
+                            {!carregando && (
+                                <Ionicons
+                                    name="arrow-forward"
+                                    size={19}
+                                    color="#FFFFFF"
+                                />
+                            )}
+                        </Pressable>
+
+                        <Pressable
+                            style={styles.botaoLogin}
+                            onPress={() => router.replace('/login')}
+                        >
+                            <Ionicons
+                                name="arrow-back-outline"
+                                size={17}
+                                color="#42A5D5"
+                            />
+                            <Text style={styles.voltarLogin}>
+                                Voltar para o login
+                            </Text>
+                        </Pressable>
+                    </View>
+
+                    {/* Identidade visual */}
+                    <View style={styles.rodape}>
+                        <Text style={styles.logo}>
+                            <Text style={styles.logoRosa}>(TE)</Text>
+                            <Text style={styles.logoAzul}>AJUDO</Text>
+                        </Text>
+
+                        <Text style={styles.slogan}>
+                            Apoio à maternidade atípica
+                        </Text>
+                    </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    flex: {
         flex: 1,
-        backgroundColor: '#DDF3FA',
     },
 
-    content: {
+    container: {
         flex: 1,
-        justifyContent: 'center',
-        paddingHorizontal: 24,
+        backgroundColor: '#F9FCFD',
+    },
+
+    fundoDecorativo: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
+},
+
+    formaRosaSuperior: {
+        position: 'absolute',
+        top: -115,
+        left: -115,
+        width: 320,
+        height: 290,
+        borderRadius: 145,
+        backgroundColor: '#FCE8F0',
+        transform: [{ rotate: '-22deg' }],
+    },
+
+    formaAzulSuperior: {
+        position: 'absolute',
+        top: -145,
+        right: -125,
+        width: 330,
+        height: 280,
+        borderRadius: 145,
+        backgroundColor: '#E5F5FC',
+        transform: [{ rotate: '18deg' }],
+    },
+
+    formaRosaInferior: {
+        position: 'absolute',
+        bottom: -145,
+        left: -125,
+        width: 350,
+        height: 290,
+        borderRadius: 145,
+        backgroundColor: '#FCE8F0',
+        transform: [{ rotate: '25deg' }],
+    },
+
+    formaAzulInferior: {
+        position: 'absolute',
+        bottom: -130,
+        right: -125,
+        width: 350,
+        height: 290,
+        borderRadius: 145,
+        backgroundColor: '#E4F5FC',
+        transform: [{ rotate: '-25deg' }],
+    },
+
+    conteudo: {
+        flexGrow: 1,
+        paddingHorizontal: 22,
+        paddingTop: 20,
+        paddingBottom: 32,
     },
 
     cabecalho: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        justifyContent: 'space-between',
+        marginBottom: 28,
     },
 
     botaoVoltar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
-    },
-
-    seta: {
-        color: '#4288AF',
-        fontSize: 30,
-        lineHeight: 31,
+        shadowColor: '#355C6D',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
     },
 
     tituloCabecalho: {
         flex: 1,
         textAlign: 'center',
-        color: '#40515A',
-        fontSize: 18,
-        fontWeight: '700',
-    },
-
-    espacoCabecalho: {
-        width: 36,
-    },
-
-    logoArea: {
-        alignItems: 'center',
-        marginBottom: 22,
-    },
-
-    logo: {
-        fontSize: 34,
+        color: '#30475D',
+        fontSize: 21,
         fontWeight: '800',
     },
 
-    logoRosa: {
-        color: '#FF7FA3',
+    espacoCabecalho: {
+        width: 46,
     },
 
-    logoAzul: {
-        color: '#42A5D5',
-    },
-
-    slogan: {
-        marginTop: 4,
-        fontSize: 13,
-        color: '#68747A',
-    },
-
-    coracao: {
-        marginTop: 6,
-        fontSize: 28,
-        color: '#FF7FA3',
-    },
-
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 28,
-        padding: 24,
-
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.08,
+    cardApresentacao: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF1F6',
+        borderRadius: 26,
+        paddingVertical: 22,
+        paddingHorizontal: 16,
+        marginBottom: 28,
+        shadowColor: '#355C6D',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
         shadowRadius: 10,
-        elevation: 4,
+        elevation: 1,
     },
 
-    icone: {
-        fontSize: 37,
-        textAlign: 'center',
-        marginBottom: 10,
+    iconeApresentacao: {
+        width: 58,
+        height: 58,
+        borderRadius: 18,
+        backgroundColor: '#FFE1EC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 13,
     },
 
-    titulo: {
-        color: '#424B54',
-        fontSize: 23,
-        fontWeight: '700',
-        textAlign: 'center',
+    textoApresentacao: {
+        flex: 1,
+        paddingRight: 8,
     },
 
-    descricao: {
-        color: '#7A858B',
+    tituloApresentacao: {
+        color: '#30475D',
+        fontSize: 17,
+        fontWeight: '800',
+        marginBottom: 5,
+    },
+
+    descricaoApresentacao: {
+        color: '#61788A',
         fontSize: 12,
         lineHeight: 18,
-        textAlign: 'center',
-        marginTop: 7,
-        marginBottom: 23,
+    },
+
+    cardFormulario: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 26,
+        padding: 22,
+        borderWidth: 1,
+        borderColor: '#EDF3F6',
+        shadowColor: '#355C6D',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        elevation: 2,
+    },
+
+    tituloFormulario: {
+        color: '#30475D',
+        fontSize: 21,
+        fontWeight: '800',
+        marginBottom: 9,
+    },
+
+    descricaoFormulario: {
+        color: '#7A8C95',
+        fontSize: 13,
+        lineHeight: 20,
+        marginBottom: 25,
     },
 
     label: {
-        color: '#4C5960',
-        fontSize: 13,
-        fontWeight: '600',
-        marginBottom: 7,
+        color: '#405565',
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 10,
+    },
+
+    campoEmail: {
+        height: 55,
+        backgroundColor: '#F8FCFE',
+        borderWidth: 1,
+        borderColor: '#DDEDF5',
+        borderRadius: 17,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        marginBottom: 22,
     },
 
     input: {
-        height: 52,
-        backgroundColor: '#F7FAFB',
-        borderWidth: 1,
-        borderColor: '#D9E7EC',
-        borderRadius: 15,
-        paddingHorizontal: 16,
+        flex: 1,
+        height: '100%',
+        marginLeft: 11,
+        color: '#30475D',
         fontSize: 14,
-        color: '#333333',
-        marginBottom: 17,
     },
 
     botaoEnviar: {
-        height: 52,
-        backgroundColor: '#FF8FB1',
-        borderRadius: 16,
+        height: 55,
+        backgroundColor: '#FF7FA3',
+        borderRadius: 18,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 10,
+        shadowColor: '#FF7FA3',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+        elevation: 3,
     },
 
     botaoDesativado: {
@@ -353,34 +470,43 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
 
-    voltarLogin: {
-        color: '#42A5D5',
-        textAlign: 'center',
-        fontSize: 13,
-        fontWeight: '600',
-        marginTop: 18,
-    },
-
-    decoracao: {
-        height: 70,
-        marginTop: 15,
+    botaoLogin: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-around',
+        justifyContent: 'center',
+        gap: 7,
+        marginTop: 24,
+        paddingVertical: 4,
     },
 
-    arcoIris: {
-        fontSize: 35,
-    },
-
-    infinito: {
-        fontSize: 44,
+    voltarLogin: {
+        color: '#42A5D5',
+        fontSize: 14,
         fontWeight: '700',
-        color: '#75C89B',
     },
 
-    estrela: {
-        fontSize: 29,
-        color: '#FFD75E',
+    rodape: {
+        alignItems: 'center',
+        marginTop: 38,
+        marginBottom: 12,
+    },
+
+    logo: {
+        fontSize: 25,
+        fontWeight: '800',
+    },
+
+    logoRosa: {
+        color: '#FF7FA3',
+    },
+
+    logoAzul: {
+        color: '#42A5D5',
+    },
+
+    slogan: {
+        marginTop: 5,
+        fontSize: 11,
+        color: '#7A8C95',
     },
 });

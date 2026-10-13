@@ -1,3 +1,5 @@
+
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
@@ -7,11 +9,13 @@ import {
     KeyboardAvoidingView,
     Platform,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../../config/firebase';
 
@@ -19,6 +23,8 @@ export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
     const [exibirSenha, setExibirSenha] = useState(false);
+    const [carregando, setCarregando] = useState(false);
+
     async function entrar() {
         const emailLimpo = email.trim().toLowerCase();
 
@@ -31,6 +37,8 @@ export default function LoginScreen() {
         }
 
         try {
+            setCarregando(true);
+
             await signInWithEmailAndPassword(
                 auth,
                 emailLimpo,
@@ -45,8 +53,7 @@ export default function LoginScreen() {
                 'E-mail ou senha incorretos. Verifique os dados e tente novamente.';
 
             if (erro?.code === 'auth/invalid-email') {
-                mensagem =
-                    'Digite um endereço de e-mail válido.';
+                mensagem = 'Digite um endereço de e-mail válido.';
             } else if (
                 erro?.code === 'auth/network-request-failed'
             ) {
@@ -59,126 +66,279 @@ export default function LoginScreen() {
                     'Muitas tentativas foram realizadas. Aguarde um pouco e tente novamente.';
             }
 
-            Alert.alert(
-                'Não foi possível entrar',
-                mensagem
-            );
+            Alert.alert('Não foi possível entrar', mensagem);
+        } finally {
+            setCarregando(false);
         }
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <KeyboardAvoidingView
-                style={styles.content}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            {/* Fundo decorativo */}
+            <View
+                pointerEvents="none"
+                style={styles.fundoDecorativo}
             >
-                <View style={styles.logoArea}>
-                    <Text style={styles.logo}>
-                        <Text style={styles.logoRosa}>(TE)</Text>
-                        <Text style={styles.logoAzul}>AJUDO</Text>
-                    </Text>
+                <View style={styles.formaRosaSuperior} />
+                <View style={styles.formaAzulSuperior} />
+                <View style={styles.formaRosaInferior} />
+                <View style={styles.formaAzulInferior} />
+            </View>
 
-                    <Text style={styles.slogan}>
-                        Apoio à maternidade atípica
-                    </Text>
-
-                    <Text style={styles.coracao}>♡</Text>
-                </View>
-
-                <View style={styles.card}>
-                    <Text style={styles.bemVindo}>Bem-vinda!</Text>
-                    <Text style={styles.descricao}>
-                        Entre na sua conta para continuar
-                    </Text>
-
-                    <Text style={styles.label}>E-mail</Text>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Digite seu e-mail"
-                        placeholderTextColor="#9A9A9A"
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                    />
-
-                    <Text style={styles.label}>Senha</Text>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Digite sua senha"
-                        placeholderTextColor="#9A9A9A"
-                        value={senha}
-                        onChangeText={setSenha}
-                        secureTextEntry={!exibirSenha}
-                    />
-
-                    <Pressable
-                        onPress={() => setExibirSenha(!exibirSenha)}
-                        style={styles.exibirSenhaArea}
-                    >
-                        <Text style={styles.exibirSenhaTexto}>
-                            {exibirSenha ? '🙈 Ocultar senha' : '👁️ Exibir senha'}
-                        </Text>
-                    </Pressable>
-
-                    <Pressable style={styles.botaoEntrar} onPress={entrar}>
-                        <Text style={styles.textoBotao}>Entrar</Text>
-                    </Pressable>
-
-                    <Pressable
-                        onPress={() =>
-                            router.push('/esqueci-senha')
-                        }
-                    >
-                        <Text style={styles.esqueciSenha}>
-                            Esqueci minha senha
-                        </Text>
-                    </Pressable>
-
-                    <View style={styles.cadastroArea}>
-                        <Text style={styles.textoNormal}>
-                            Ainda não tem uma conta?{' '}
+            <KeyboardAvoidingView
+                style={styles.flex}
+                behavior={
+                    Platform.OS === 'ios' ? 'padding' : undefined
+                }
+            >
+                <ScrollView
+                    contentContainerStyle={styles.conteudo}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Identidade do TEAjudo */}
+                    <View style={styles.apresentacao}>
+                        <Text style={styles.logo}>
+                            <Text style={styles.logoRosa}>(TE)</Text>
+                            <Text style={styles.logoAzul}>Ajudo</Text>
                         </Text>
 
-                        <Pressable onPress={() => router.push('/cadastro')}>
-                            <Text style={styles.cadastreSe}>Cadastre-se</Text>
-                        </Pressable>
+                        <Text style={styles.slogan}>
+                            Apoio à maternidade atípica
+                        </Text>
+
+                        <View style={styles.divisorDecorativo}>
+                            <View style={styles.linhaDecorativa} />
+                            <Ionicons
+                                name="heart-outline"
+                                size={18}
+                                color="#FF8FB1"
+                            />
+                            <View style={styles.linhaDecorativa} />
+                        </View>
+
+                        <Text style={styles.boasVindas}>
+                            Que bom ter você aqui!
+                        </Text>
+
+                        <Text style={styles.mensagem}>
+                            Um cantinho de cuidado feito para você.
+                        </Text>
                     </View>
-                </View>
 
-                <View style={styles.decoracao}>
-                    <Text style={styles.arcoIris}>🌈</Text>
-                    <Text style={styles.infinito}>∞</Text>
-                    <Text style={styles.estrela}>★</Text>
-                </View>
+                    {/* Formulário compacto */}
+                    <View style={styles.cardFormulario}>
+                        <Text style={styles.tituloFormulario}>
+                            Entre na sua conta
+                        </Text>
+
+                        <Text style={styles.descricaoFormulario}>
+                            Estamos felizes em te receber.
+                        </Text>
+
+                        <Text style={styles.label}>E-mail</Text>
+
+                        <View style={styles.campo}>
+                            <Ionicons
+                                name="mail-outline"
+                                size={18}
+                                color="#42A5D5"
+                            />
+
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Digite seu e-mail"
+                                placeholderTextColor="#9BAAB4"
+                                value={email}
+                                onChangeText={setEmail}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                autoComplete="email"
+                            />
+                        </View>
+
+                        <Text style={styles.label}>Senha</Text>
+
+                        <View style={styles.campo}>
+                            <Ionicons
+                                name="lock-closed-outline"
+                                size={18}
+                                color="#42A5D5"
+                            />
+
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Digite sua senha"
+                                placeholderTextColor="#9BAAB4"
+                                value={senha}
+                                onChangeText={setSenha}
+                                secureTextEntry={!exibirSenha}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+
+                            <Pressable
+                                style={styles.botaoOlho}
+                                onPress={() =>
+                                    setExibirSenha(!exibirSenha)
+                                }
+                                accessibilityLabel={
+                                    exibirSenha
+                                        ? 'Ocultar senha'
+                                        : 'Exibir senha'
+                                }
+                            >
+                                <Ionicons
+                                    name={
+                                        exibirSenha
+                                            ? 'eye-off-outline'
+                                            : 'eye-outline'
+                                    }
+                                    size={20}
+                                    color="#8A9DA9"
+                                />
+                            </Pressable>
+                        </View>
+
+                        <Pressable
+                            style={[
+                                styles.botaoEntrar,
+                                carregando && styles.botaoDesativado,
+                            ]}
+                            onPress={entrar}
+                            disabled={carregando}
+                        >
+                            <Text style={styles.textoBotao}>
+                                {carregando ? 'Entrando...' : 'Entrar'}
+                            </Text>
+                        </Pressable>
+
+                        <Pressable
+                            style={styles.botaoEsqueci}
+                            onPress={() =>
+                                router.push('/esqueci-senha')
+                            }
+                        >
+                            <Text style={styles.esqueciSenha}>
+                                Esqueci minha senha
+                            </Text>
+                        </Pressable>
+
+                        <View style={styles.divisor} />
+
+                        <View style={styles.cadastroArea}>
+                            <Text style={styles.textoNormal}>
+                                Ainda não tem uma conta?{' '}
+                            </Text>
+
+                            <Pressable
+                                onPress={() => router.push('/cadastro')}
+                            >
+                                <Text style={styles.cadastreSe}>
+                                    Cadastre-se
+                                </Text>
+                            </Pressable>
+                        </View>
+                    </View>
+
+                    {/* Rodapé */}
+                    <View style={styles.rodape}>
+                        <Ionicons
+                            name="heart-outline"
+                            size={15}
+                            color="#FF8FB1"
+                        />
+                        <Text style={styles.textoRodape}>
+                            Cuidar também é acolher
+                        </Text>
+                    </View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
+    flex: {
+        flex: 1,
+    },
+
     container: {
         flex: 1,
-        backgroundColor: '#DDF3FA',
+        backgroundColor: '#F9FCFD',
     },
 
-    content: {
-        flex: 1,
+    fundoDecorativo: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        overflow: 'hidden',
+    },
+
+    formaRosaSuperior: {
+        position: 'absolute',
+        top: -115,
+        left: -115,
+        width: 320,
+        height: 290,
+        borderRadius: 145,
+        backgroundColor: '#FCE8F0',
+        transform: [{ rotate: '-22deg' }],
+    },
+
+    formaAzulSuperior: {
+        position: 'absolute',
+        top: -145,
+        right: -125,
+        width: 330,
+        height: 280,
+        borderRadius: 145,
+        backgroundColor: '#E5F5FC',
+        transform: [{ rotate: '18deg' }],
+    },
+
+    formaRosaInferior: {
+        position: 'absolute',
+        bottom: -145,
+        left: -125,
+        width: 350,
+        height: 290,
+        borderRadius: 145,
+        backgroundColor: '#FCE8F0',
+        transform: [{ rotate: '25deg' }],
+    },
+
+    formaAzulInferior: {
+        position: 'absolute',
+        bottom: -130,
+        right: -125,
+        width: 350,
+        height: 290,
+        borderRadius: 145,
+        backgroundColor: '#E4F5FC',
+        transform: [{ rotate: '-25deg' }],
+    },
+
+    conteudo: {
+        flexGrow: 1,
         justifyContent: 'center',
-        paddingHorizontal: 24,
+        paddingHorizontal: 28,
+        paddingVertical: 30,
     },
 
-    logoArea: {
+    apresentacao: {
         alignItems: 'center',
-        marginBottom: 25,
+        marginBottom: 24,
     },
 
-    logo: {
-        fontSize: 38,
-        fontWeight: '800',
-    },
+   logo: {
+    fontSize: 37,
+    fontWeight: '800',
+    textAlign: 'center',
+},
 
     logoRosa: {
         color: '#FF7FA3',
@@ -189,138 +349,173 @@ const styles = StyleSheet.create({
     },
 
     slogan: {
-        marginTop: 4,
-        fontSize: 14,
-        color: '#68747A',
-    },
-
-    coracao: {
-        marginTop: 8,
-        fontSize: 30,
-        color: '#FF7FA3',
-    },
-
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 28,
-        padding: 24,
-
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 4,
-    },
-
-    bemVindo: {
-        fontSize: 25,
-        fontWeight: '700',
-        color: '#424B54',
-        textAlign: 'center',
-    },
-
-    descricao: {
-        fontSize: 14,
-        color: '#7A858B',
-        textAlign: 'center',
         marginTop: 5,
-        marginBottom: 22,
+        fontSize: 12,
+        color: '#7A8C95',
+        textAlign: 'center',
+        letterSpacing: 0.3,
+    },
+
+    divisorDecorativo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginTop: 22,
+        marginBottom: 18,
+    },
+
+    linhaDecorativa: {
+        width: 35,
+        height: 1,
+        backgroundColor: '#F3DCE5',
+    },
+
+    boasVindas: {
+        color: '#30475D',
+        fontSize: 19,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+
+    mensagem: {
+        color: '#8496A0',
+        fontSize: 12,
+        textAlign: 'center',
+        marginTop: 6,
+    },
+
+    cardFormulario: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 22,
+        paddingHorizontal: 20,
+        paddingVertical: 20,
+        borderWidth: 1,
+        borderColor: '#EDF3F6',
+        shadowColor: '#355C6D',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+
+    tituloFormulario: {
+        color: '#30475D',
+        fontSize: 16,
+        fontWeight: '700',
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+
+    descricaoFormulario: {
+        color: '#8A9AA4',
+        fontSize: 11,
+        textAlign: 'center',
+        marginBottom: 20,
     },
 
     label: {
-        fontSize: 14,
+        color: '#526573',
+        fontSize: 12,
         fontWeight: '600',
-        color: '#4C5960',
         marginBottom: 7,
     },
 
-    input: {
-        height: 52,
-        backgroundColor: '#F7FAFB',
+    campo: {
+        height: 45,
+        backgroundColor: '#FAFCFD',
         borderWidth: 1,
-        borderColor: '#D9E7EC',
-        borderRadius: 15,
-        paddingHorizontal: 16,
-        fontSize: 15,
-        color: '#333333',
-        marginBottom: 16,
+        borderColor: '#E5EFF3',
+        borderRadius: 13,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        marginBottom: 15,
     },
 
-    exibirSenhaArea: {
-        alignSelf: 'flex-end',
-        marginTop: -8,
-        marginBottom: 14,
+    input: {
+        flex: 1,
+        height: '100%',
+        marginLeft: 9,
+        color: '#30475D',
+        fontSize: 13,
     },
 
-    exibirSenhaTexto: {
+    botaoOlho: {
+        padding: 6,
+        marginLeft: 3,
+    },
+
+    botaoEntrar: {
+        height: 45,
+        backgroundColor: '#FF8FB1',
+        borderRadius: 13,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 3,
+        shadowColor: '#FF8FB1',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+
+    botaoDesativado: {
+        opacity: 0.6,
+    },
+
+    textoBotao: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+
+    botaoEsqueci: {
+        alignItems: 'center',
+        marginTop: 16,
+        paddingVertical: 4,
+    },
+
+    esqueciSenha: {
         color: '#42A5D5',
         fontSize: 12,
         fontWeight: '600',
     },
 
-    botaoEntrar: {
-        backgroundColor: '#FF8FB1',
-        height: 52,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 5,
-    },
-
-    textoBotao: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '700',
-    },
-
-    esqueciSenha: {
-        color: '#42A5D5',
-        textAlign: 'center',
-        fontSize: 13,
-        fontWeight: '600',
-        marginTop: 15,
+    divisor: {
+        height: 1,
+        backgroundColor: '#F0F3F5',
+        marginTop: 16,
+        marginBottom: 16,
     },
 
     cadastroArea: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 24,
+        flexWrap: 'wrap',
     },
 
     textoNormal: {
-        color: '#707B80',
-        fontSize: 13,
+        color: '#8A9AA4',
+        fontSize: 11,
     },
 
     cadastreSe: {
         color: '#FF7FA3',
-        fontSize: 13,
+        fontSize: 11,
         fontWeight: '700',
     },
 
-    decoracao: {
-        height: 70,
-        marginTop: 20,
+    rodape: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-around',
+        justifyContent: 'center',
+        gap: 6,
+        marginTop: 20,
     },
 
-    arcoIris: {
-        fontSize: 37,
-    },
-
-    infinito: {
-        fontSize: 47,
-        fontWeight: '700',
-        color: '#75C89B',
-    },
-
-    estrela: {
-        fontSize: 30,
-        color: '#FFD75E',
+    textoRodape: {
+        color: '#8A9AA4',
+        fontSize: 11,
     },
 });
