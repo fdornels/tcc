@@ -87,107 +87,63 @@ await setDoc(
   return dados.fotoUrl;
 }
 
+async function escolherFotoCrianca() {
+    const permissao =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    async function escolherFotoCrianca() {
-        const permissao =
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (!permissao.granted) {
-            Alert.alert(
-                'Permissão necessária',
-                'Permita o acesso à galeria para escolher uma foto.'
-            );
-            return;
-        }
-
-        // continua...
-
-        const resultado = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-        });
-
-        if (resultado.canceled) {
-            return;
-        }
-
-        const usuarioAtual = auth.currentUser;
-
-        if (!usuarioAtual) {
-            Alert.alert('Erro', 'Usuário não encontrado.');
-            return;
-        }
-try {
-  const token = await usuarioAtual.getIdToken();
-
-  const resposta = await fetch(
-    'http://10.0.2.2:3001/teste-autenticacao',
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+    if (!permissao.granted) {
+        Alert.alert(
+            'Permissão necessária',
+            'Permita o acesso à galeria para escolher uma foto.'
+        );
+        return;
     }
-  );
 
-  const dados = await resposta.json();
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+    });
 
-  console.log('TESTE AUTENTICAÇÃO:', resposta.status, dados);
-} catch (erro) {
-  console.log('ERRO TESTE AUTENTICAÇÃO:', erro);
-}
+    if (resultado.canceled) {
+        return;
+    }
+
+    const usuarioAtual = auth.currentUser;
+
+    if (!usuarioAtual) {
+        Alert.alert(
+            'Erro',
+            'Você precisa estar conectada para alterar a foto.'
+        );
+        return;
+    }
+
+    try {
         const uri = resultado.assets[0].uri;
-        try {
-            await enviarFotoCrianca(
-                uri,
-                usuarioAtual.uid
-            );
-        } catch (erro) {
-            console.log(
-    'ERRO COMPLETO DO UPLOAD:',
-    JSON.stringify(erro, Object.getOwnPropertyNames(erro))
-);
 
-            Alert.alert(
-                'Erro',
-                'Não foi possível enviar a foto da criança.'
-            );
+        const novaFotoUrl = await enviarFotoCrianca(
+            uri,
+            usuarioAtual.uid
+        );
 
-            return;
-        }
+        setFotoCrianca(novaFotoUrl);
 
-        const pastaFotos =
-            `${FileSystem.documentDirectory}crianca/`;
+        Alert.alert(
+            'Foto atualizada!',
+            'A foto da criança foi salva com sucesso.'
+        );
+    } catch (erro) {
+        console.log('Erro ao enviar foto da criança:', erro);
 
-        const fotoSalva =
-            `${pastaFotos}${usuarioAtual.uid}.jpg`;
-
-        const infoPasta =
-            await FileSystem.getInfoAsync(pastaFotos);
-
-        if (!infoPasta.exists) {
-            await FileSystem.makeDirectoryAsync(pastaFotos, {
-                intermediates: true,
-            });
-        }
-
-        const fotoAntiga =
-            await FileSystem.getInfoAsync(fotoSalva);
-
-        if (fotoAntiga.exists) {
-            await FileSystem.deleteAsync(fotoSalva, {
-                idempotent: true,
-            });
-        }
-
-        await FileSystem.copyAsync({
-            from: uri,
-            to: fotoSalva,
-        });
-
-        setFotoCrianca(`${fotoSalva}?t=${Date.now()}`);
+        Alert.alert(
+            'Erro',
+            'Não foi possível enviar a foto. A foto anterior foi preservada.'
+        );
     }
+}
+    
     async function excluirFotoCrianca() {
         const usuarioAtual = auth.currentUser;
 
@@ -340,55 +296,35 @@ if (!resposta.ok) {
         }
     }
     async function carregarFotoCrianca() {
-        const usuarioAtual = auth.currentUser;
+    const usuarioAtual = auth.currentUser;
 
-        if (!usuarioAtual) {
-            setFotoCrianca(null);
-            return;
+    setFotoCrianca(null);
+
+    if (!usuarioAtual) return;
+
+    try {
+        const referencia = doc(
+            db,
+            'usuarios',
+            usuarioAtual.uid,
+            'crianca',
+            'dados'
+        );
+
+        const documento = await getDoc(referencia);
+
+        if (!documento.exists()) return;
+
+        const fotoUrl = documento.data().fotoUrl;
+
+        if (typeof fotoUrl === 'string' && fotoUrl.trim()) {
+            setFotoCrianca(fotoUrl);
         }
-
-        try {
-            const referenciaCrianca = doc(
-                db,
-                'usuarios',
-                usuarioAtual.uid,
-                'crianca',
-                'dados'
-            );
-
-            const documento = await getDoc(referenciaCrianca);
-
-            if (documento.exists()) {
-                const dados = documento.data();
-
-                if (dados.fotoUrl) {
-                    setFotoCrianca(dados.fotoUrl);
-                    return;
-                }
-            }
-
-            const fotoSalva =
-                `${FileSystem.documentDirectory}crianca/${usuarioAtual.uid}.jpg`;
-
-            const infoFoto =
-                await FileSystem.getInfoAsync(fotoSalva);
-
-            if (infoFoto.exists) {
-                setFotoCrianca(
-                    `${fotoSalva}?t=${Date.now()}`
-                );
-            } else {
-                setFotoCrianca(null);
-            }
-        } catch (erro) {
-            console.log(
-                'Erro ao carregar foto da criança:',
-                erro
-            );
-
-            setFotoCrianca(null);
-        }
+    } catch (erro) {
+        console.log('Erro ao carregar foto da criança:', erro);
+        setFotoCrianca(null);
     }
+}
     useFocusEffect(
         useCallback(() => {
             carregarCrianca();

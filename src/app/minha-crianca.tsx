@@ -45,50 +45,40 @@ export default function MinhaCriancaScreen() {
     function editarCrianca() {
         router.push('/editar-crianca');
     }
-    async function carregarFotoCrianca() {
-        const usuarioAtual = auth.currentUser;
+   async function carregarFotoCrianca() {
+  const usuarioAtual = auth.currentUser;
 
+  setFotoCrianca(null);
 
-        if (!usuarioAtual) {
-            setFotoCrianca(null);
-            return;
-        }
-        try {
-  const referencia = doc(
-    db,
-    'usuarios',
-    usuarioAtual.uid,
-    'crianca',
-    'dados'
-  );
+  if (!usuarioAtual) {
+    return;
+  }
 
-  const documento = await getDoc(referencia);
+  try {
+    const referencia = doc(
+      db,
+      'usuarios',
+      usuarioAtual.uid,
+      'crianca',
+      'dados'
+    );
 
-  if (documento.exists()) {
+    const documento = await getDoc(referencia);
+
+    if (!documento.exists()) {
+      return;
+    }
+
     const fotoUrl = documento.data().fotoUrl;
 
     if (typeof fotoUrl === 'string' && fotoUrl.trim()) {
       setFotoCrianca(fotoUrl);
-      return;
     }
+  } catch (erro) {
+    console.log('Erro ao carregar foto da criança:', erro);
+    setFotoCrianca(null);
   }
-} catch (erro) {
-  console.log('Erro ao carregar foto online:', erro);
 }
-
-        const fotoSalva =
-            `${FileSystem.documentDirectory}crianca/${usuarioAtual.uid}.jpg`;
-
-        const infoFoto = await FileSystem.getInfoAsync(fotoSalva);
-
-        if (infoFoto.exists) {
-            console.log('FOTO ENCONTRADA:', fotoSalva);
-            setFotoCrianca(fotoSalva);
-        } else {
-            console.log('FOTO NÃO ENCONTRADA:', fotoSalva);
-            setFotoCrianca(null);
-        }
-    }
 
     function excluirCrianca() {
         Alert.alert(
@@ -113,7 +103,28 @@ export default function MinhaCriancaScreen() {
                                 );
                                 return;
                             }
+const token = await usuario.getIdToken();
 
+const resposta = await fetch(
+  'http://10.0.2.2:3001/fotos/crianca',
+  {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
+
+if (!resposta.ok) {
+  throw new Error('Não foi possível excluir a foto do Cloudinary.');
+}
+
+const fotoLocal =
+  `${FileSystem.documentDirectory}crianca/${usuario.uid}.jpg`;
+
+await FileSystem.deleteAsync(fotoLocal, {
+  idempotent: true,
+});
                             await deleteDoc(
                                 doc(
                                     db,
@@ -125,6 +136,7 @@ export default function MinhaCriancaScreen() {
                             );
 
                             setCrianca(null);
+setFotoCrianca(null);
 
                             Alert.alert(
                                 'Cadastro excluído',
@@ -439,14 +451,11 @@ export default function MinhaCriancaScreen() {
                         {/* APRESENTAÇÃO */}
                         <View style={styles.apresentacao}>
                             <View style={styles.avatar}>
-                                {fotoCrianca ? (
-                                    <Image
-                                        source={{ uri: fotoCrianca }}
-                                        style={styles.fotoCrianca}
-                                    />
-                                ) : (
-                                    <Text style={styles.avatarEmoji}>👶</Text>
-                                )}
+                                <Ionicons
+  name="person-outline"
+  size={34}
+  color="#42A5D5"
+/>
                             </View>
 
                             <Text style={styles.tituloApresentacao}>

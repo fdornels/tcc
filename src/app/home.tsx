@@ -44,35 +44,40 @@ export default function HomeScreen() {
 
 
 
-    const carregarFotoPerfil = useCallback(async () => {
+   const carregarFotoPerfil = useCallback(async () => {
+    const usuario = auth.currentUser;
 
-        const usuario = auth.currentUser;
+    if (!usuario) {
+        setFotoPerfil(null);
+        return;
+    }
 
-        if (!usuario) {
+    try {
+        const documento = await getDoc(
+            doc(db, 'usuarios', usuario.uid)
+        );
 
-            setFotoPerfil(null);
+        const fotoUrl = documento.exists()
+            ? documento.data().fotoPerfilUrl
+            : null;
 
+        if (typeof fotoUrl === 'string' && fotoUrl.trim()) {
+            setFotoPerfil(fotoUrl);
             return;
-
         }
 
-        try {
+        // Foto local antiga, enquanto não for enviada ao Cloudinary
+        const caminho =
+            `${FileSystem.documentDirectory}perfil/${usuario.uid}.jpg`;
 
-            const caminho = `${FileSystem.documentDirectory}perfil/${usuario.uid}.jpg`;
+        const info = await FileSystem.getInfoAsync(caminho);
 
-            const info = await FileSystem.getInfoAsync(caminho);
-
-            setFotoPerfil(info.exists ? caminho : null);
-
-        } catch (erro) {
-
-            console.log('Erro ao carregar foto de perfil:', erro);
-
-            setFotoPerfil(null);
-
-        }
-
-    }, []);
+        setFotoPerfil(info.exists ? caminho : null);
+    } catch (erro) {
+        console.log('Erro ao carregar foto de perfil:', erro);
+        setFotoPerfil(null);
+    }
+}, []);
 
 
 

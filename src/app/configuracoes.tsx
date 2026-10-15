@@ -2,11 +2,12 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
 import {
     Alert,
     Image,
+    Platform,
     Pressable,
     StyleSheet,
     Text,
@@ -49,24 +50,40 @@ export default function ConfiguracoesScreen() {
     }
 
     async function carregarFotoPerfil() {
-        const usuarioAtual = auth.currentUser;
+    const usuarioAtual = auth.currentUser;
 
-        if (!usuarioAtual) {
-            setFotoPerfil(null);
+    if (!usuarioAtual) {
+        setFotoPerfil(null);
+        return;
+    }
+
+    try {
+        const documento = await getDoc(
+            doc(db, 'usuarios', usuarioAtual.uid)
+        );
+
+        const fotoUrl = documento.exists()
+            ? documento.data().fotoPerfilUrl
+            : null;
+
+        if (typeof fotoUrl === 'string' && fotoUrl.trim()) {
+            setFotoPerfil(fotoUrl);
             return;
         }
 
+        // Mantém a foto antiga do emulador até ela ser enviada.
         const fotoSalva =
             `${FileSystem.documentDirectory}perfil/${usuarioAtual.uid}.jpg`;
 
         const infoFoto = await FileSystem.getInfoAsync(fotoSalva);
 
-        if (infoFoto.exists) {
-            setFotoPerfil(`${fotoSalva}?t=${Date.now()}`);
-        } else {
-            setFotoPerfil(null);
-        }
+        setFotoPerfil(
+            infoFoto.exists ? fotoSalva : null
+        );
+    } catch (erro) {
+        console.log('Erro ao carregar foto de perfil:', erro);
     }
+}
     useFocusEffect(
         useCallback(() => {
             verificarAdmin();
@@ -74,79 +91,90 @@ export default function ConfiguracoesScreen() {
         }, [])
     );
     async function escolherFotoPerfil() {
-        const permissao =
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const permissao =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-        if (!permissao.granted) {
-            Alert.alert(
-                'Permissão necessária',
-                'Permita o acesso às fotos para escolher uma imagem de perfil.'
-            );
+    if (!permissao.granted) {
+        Alert.alert(
+            'Permissão necessária',
+            'Permita o acesso às fotos para escolher uma imagem de perfil.'
+        );
+        return;
+    }
+
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+    });
+
+    if (resultado.canceled) return;
+
+    try {
+        const usuarioAtual = auth.currentUser;
+
+        if (!usuarioAtual) {
+            Alert.alert('Erro', 'Faça login para alterar sua foto.');
             return;
         }
 
-        const resultado = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-        });
+        const uri = resultado.assets[0].uri;
 
-        if (!resultado.canceled) {
-            try {
-                const usuarioAtual = auth.currentUser;
+        const token = await usuarioAtual.getIdToken();
 
-                if (!usuarioAtual) {
-                    Alert.alert(
-                        'Erro',
-                        'Você precisa estar conectada para alterar a foto.'
-                    );
-                    return;
-                }
+        const enderecoServidor =
+            Platform.OS === 'android'
+                ? 'http://10.0.2.2:3001'
+                : 'http://localhost:3001';
 
-                const uri = resultado.assets[0].uri;
-
-                const pastaFotos = `${FileSystem.documentDirectory}perfil/`;
-                const fotoSalva = `${pastaFotos}${usuarioAtual.uid}.jpg`;
-
-                const infoPasta = await FileSystem.getInfoAsync(pastaFotos);
-
-                if (!infoPasta.exists) {
-                    await FileSystem.makeDirectoryAsync(pastaFotos, {
-                        intermediates: true,
-                    });
-                }
-
-                const fotoAntiga = await FileSystem.getInfoAsync(fotoSalva);
-
-                if (fotoAntiga.exists) {
-                    await FileSystem.deleteAsync(fotoSalva, {
-                        idempotent: true,
-                    });
-                }
-
-
-                await FileSystem.copyAsync({
-                    from: uri,
-                    to: fotoSalva,
-                });
-
-                setFotoPerfil(`${fotoSalva}?t=${Date.now()}`);
-
-                Alert.alert(
-                    'Foto atualizada! 💙',
-                    'Sua foto de perfil foi salva com sucesso.'
-                );
-            } catch (erro) {
-                console.log('Erro ao salvar foto:', erro);
-
-                Alert.alert(
-                    'Erro',
-                    'Não foi possível salvar sua foto de perfil.'
-                );
+        const resposta = await FileSystem.uploadAsync(
+            `${enderecoServidor}/fotos/responsavel`,
+            uri,
+            {
+                httpMethod: 'POST',
+                uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+                fieldName: 'foto',
+                mimeType: 'image/jpeg',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
             }
+        );
+
+        if (resposta.status < 200 || resposta.status >= 300) {
+            throw new Error(
+                `Falha no envio da foto: ${resposta.status}`
+            );
         }
+
+        const dados = JSON.parse(resposta.body);
+
+        if (!dados.fotoUrl) {
+            throw new Error('Servidor não retornou a foto.');
+        }
+
+        await setDoc(
+            doc(db, 'usuarios', usuarioAtual.uid),
+            { fotoPerfilUrl: dados.fotoUrl },
+            { merge: true }
+        );
+
+        setFotoPerfil(dados.fotoUrl);
+
+        Alert.alert(
+            'Foto atualizada!',
+            'Sua foto foi salva e poderá aparecer em outros dispositivos.'
+        );
+    } catch (erro) {
+        console.log('Erro ao enviar foto do responsável:', erro);
+
+        Alert.alert(
+            'Erro',
+            'Não foi possível enviar a foto. A foto anterior foi preservada.'
+        );
     }
+}
     async function excluirFotoPerfil() {
         const usuarioAtual = auth.currentUser;
 

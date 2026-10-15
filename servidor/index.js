@@ -143,7 +143,80 @@ app.delete('/fotos/crianca', verificarLogin, async (req, res) => {
     });
   }
 });
+// Enviar foto do responsável para o Cloudinary
+app.post(
+  '/fotos/responsavel',
+  verificarLogin,
+  upload.single('foto'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          erro: 'Nenhuma foto enviada.',
+        });
+      }
 
+      const uid = req.usuario.uid;
+
+      const fotoUrl = await new Promise((resolve, reject) => {
+        const envio = cloudinary.uploader.upload_stream(
+          {
+            folder: 'teajudo/responsaveis',
+            public_id: uid,
+            overwrite: true,
+            resource_type: 'image',
+            invalidate: true,
+          },
+          (erro, resultado) => {
+            if (erro) return reject(erro);
+            resolve(resultado.secure_url);
+          }
+        );
+
+        envio.end(req.file.buffer);
+      });
+
+      res.json({ fotoUrl });
+    } catch (erro) {
+      console.error('Erro ao enviar foto do responsável:', erro);
+
+      res.status(500).json({
+        erro: 'Não foi possível enviar a foto do responsável.',
+      });
+    }
+  }
+);
+
+// Excluir foto do responsável do Cloudinary
+app.delete('/fotos/responsavel', verificarLogin, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+
+    const resultado = await cloudinary.uploader.destroy(
+      `teajudo/responsaveis/${uid}`,
+      {
+        resource_type: 'image',
+        invalidate: true,
+      }
+    );
+
+    if (resultado.result !== 'ok' && resultado.result !== 'not found') {
+      return res.status(500).json({
+        erro: 'Não foi possível excluir a foto.',
+      });
+    }
+
+    res.json({
+      mensagem: 'Foto do responsável excluída com sucesso.',
+    });
+  } catch (erro) {
+    console.error('Erro ao excluir foto do responsável:', erro);
+
+    res.status(500).json({
+      erro: 'Não foi possível excluir a foto.',
+    });
+  }
+});
 const PORT = 3001;
 
 app.listen(PORT, '0.0.0.0', () => {
