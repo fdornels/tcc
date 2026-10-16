@@ -287,6 +287,56 @@ app.get('/vinculos/solicitacoes', verificarLogin, async (req, res) => {
     });
   }
 });
+app.post('/vinculos/responder', verificarLogin, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+    const { solicitacaoId, decisao } = req.body;
+
+    if (
+      typeof solicitacaoId !== 'string' ||
+      !['aprovar', 'recusar'].includes(decisao)
+    ) {
+      return res.status(400).json({ erro: 'Dados inválidos.' });
+    }
+
+    const banco = getFirestore();
+    const solicitacaoRef = banco.collection('solicitacoesVinculo').doc(solicitacaoId);
+
+    const resultado = await banco.runTransaction(async (transacao) => {
+      const solicitacaoDoc = await transacao.get(solicitacaoRef);
+
+      if (!solicitacaoDoc.exists) {
+        return { status: 404, erro: 'Solicitação não encontrada.' };
+      }
+
+      const dados = solicitacaoDoc.data();
+
+      if (dados.responsavelUid !== uid) {
+        return { status: 403, erro: 'Você não pode responder a esta solicitação.' };
+      }
+
+      if (dados.status !== 'pendente') {
+        return { status: 400, erro: 'Solicitação já respondida.' };
+      }
+
+      transacao.update(solicitacaoRef, {
+        status: decisao === 'aprovar' ? 'aprovado' : 'recusado',
+        respondidoEm: Timestamp.now(),
+      });
+
+      return { sucesso: true };
+    });
+
+    if (resultado.erro) {
+      return res.status(resultado.status).json({ erro: resultado.erro });
+    }
+
+    return res.json({ mensagem: 'Solicitação respondida com sucesso.' });
+  } catch (erro) {
+    console.error('Erro ao responder solicitação:', erro);
+    return res.status(500).json({ erro: 'Não foi possível responder.' });
+  }
+});
 app.get('/teste-autenticacao', verificarLogin, (req, res) => {
   res.json({
     mensagem: 'Autenticação funcionando!',

@@ -59,6 +59,52 @@ useFocusEffect(
         carregarSolicitacoes();
     }, [carregarSolicitacoes])
 );
+async function responderSolicitacao(
+    solicitacaoId: string,
+    decisao: 'aprovar' | 'recusar'
+) {
+    try {
+        const usuario = auth.currentUser;
+
+        if (!usuario) {
+            alert('Faça login para continuar.');
+            return;
+        }
+
+        const token = await usuario.getIdToken();
+
+        const resposta = await fetch(
+            'https://teajudo-api.onrender.com/vinculos/responder',
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    solicitacaoId,
+                    decisao,
+                }),
+            }
+        );
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(dados.erro || 'Erro ao responder.');
+        }
+
+        alert(
+            decisao === 'aprovar'
+                ? 'Profissional aprovado!'
+                : 'Solicitação recusada.'
+        );
+
+        await carregarSolicitacoes();
+    } catch (erro: any) {
+        alert(erro.message || 'Não foi possível responder.');
+    }
+}
 async function gerarCodigo() {
     if (gerando) return;
 
@@ -171,6 +217,29 @@ async function gerarCodigo() {
                 <Text style={styles.statusSolicitacao}>
                     Aguardando sua autorização
                 </Text>
+                <View style={styles.acoesSolicitacao}>
+    <Pressable
+        style={styles.botaoAprovar}
+        onPress={() =>
+            responderSolicitacao(solicitacao.id, 'aprovar')
+        }
+    >
+        <Text style={styles.textoAcao}>
+            Aprovar
+        </Text>
+    </Pressable>
+
+    <Pressable
+        style={styles.botaoRecusar}
+        onPress={() =>
+            responderSolicitacao(solicitacao.id, 'recusar')
+        }
+    >
+        <Text style={styles.textoRecusar}>
+            Recusar
+        </Text>
+    </Pressable>
+</View>
             </View>
         ))
     )}
@@ -265,6 +334,38 @@ statusSolicitacao: {
     fontSize: 12,
     color: '#8196A3',
     marginTop: 5,
+},
+acoesSolicitacao: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 15,
+    width: '100%',
+},
+
+botaoAprovar: {
+    flex: 1,
+    backgroundColor: '#42A5D5',
+    padding: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+},
+
+botaoRecusar: {
+    flex: 1,
+    backgroundColor: '#FFF0F4',
+    padding: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+},
+
+textoAcao: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+},
+
+textoRecusar: {
+    color: '#E46B98',
+    fontWeight: '700',
 },
 container: {
         flex: 1,
