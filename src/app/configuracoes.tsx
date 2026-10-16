@@ -7,11 +7,10 @@ import { useCallback, useState } from 'react';
 import {
     Alert,
     Image,
-    Platform,
     Pressable,
     StyleSheet,
     Text,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -124,9 +123,7 @@ export default function ConfiguracoesScreen() {
         const token = await usuarioAtual.getIdToken();
 
         const enderecoServidor =
-            Platform.OS === 'android'
-                ? 'http://10.0.2.2:3001'
-                : 'http://localhost:3001';
+    'http://172.20.10.8:3001';
 
         const resposta = await FileSystem.uploadAsync(
             `${enderecoServidor}/fotos/responsavel`,
@@ -167,14 +164,19 @@ export default function ConfiguracoesScreen() {
             'Sua foto foi salva e poderá aparecer em outros dispositivos.'
         );
     } catch (erro) {
-        console.log('Erro ao enviar foto do responsável:', erro);
+    console.log('Erro ao enviar foto do responsável:', erro);
 
-        Alert.alert(
-            'Erro',
-            'Não foi possível enviar a foto. A foto anterior foi preservada.'
-        );
-    }
+    const mensagem =
+        erro instanceof Error
+            ? erro.message
+            : String(erro);
+
+    Alert.alert(
+        'Erro ao enviar foto',
+        mensagem
+    );
 }
+    }
     async function excluirFotoPerfil() {
         const usuarioAtual = auth.currentUser;
 

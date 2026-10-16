@@ -57,7 +57,7 @@ async function enviarFotoCrianca(uri: string, uid: string) {
   const token = await usuarioAtual.getIdToken();
 
   const resposta = await FileSystem.uploadAsync(
-    'http://10.0.2.2:3001/fotos/crianca',
+    'http://172.20.10.8:3001/fotos/crianca',
     uri,
     {
       httpMethod: 'POST',
@@ -134,12 +134,17 @@ async function escolherFotoCrianca() {
             'Foto atualizada!',
             'A foto da criança foi salva com sucesso.'
         );
-    } catch (erro) {
+        } catch (erro) {
         console.log('Erro ao enviar foto da criança:', erro);
 
+        const mensagem =
+            erro instanceof Error
+                ? erro.message
+                : String(erro);
+
         Alert.alert(
-            'Erro',
-            'Não foi possível enviar a foto. A foto anterior foi preservada.'
+            'Erro ao enviar foto',
+            mensagem
         );
     }
 }
@@ -167,7 +172,7 @@ async function escolherFotoCrianca() {
 
 const token = await usuarioAtual.getIdToken();
 const resposta = await fetch(
-  'http://10.0.2.2:3001/fotos/crianca',
+ 'http://172.20.10.8:3001/fotos/crianca',
   {
     method: 'DELETE',
     headers: {
