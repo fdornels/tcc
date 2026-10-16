@@ -1,10 +1,14 @@
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import { auth, db } from '../../config/firebase';
 
+import { Ionicons } from '@expo/vector-icons';
 import {
     Alert,
+    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -12,16 +16,15 @@ import {
     StyleSheet,
     Text,
     TextInput,
-    View,
+    View
 } from 'react-native';
-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Crianca = {
     nome: string;
     apelido: string;
     dataNascimento: string;
-    sexo: 'Menina' | 'Menino' | 'Prefiro não identificar';
+    sexo?: 'Menina' | 'Menino' | 'Prefiro não identificar';
     escola: string;
     comunicacao: string;
     preferencias: string;
@@ -30,6 +33,8 @@ type Crianca = {
 };
 
 export default function CadastrarCriancaScreen() {
+    const [fotoCrianca, setFotoCrianca] = useState<string | null>(null);
+    const [salvando, setSalvando] = useState(false);
     const [nome, setNome] = useState('');
     const [apelido, setApelido] = useState('');
     const [dataNascimento, setDataNascimento] = useState('');
@@ -42,105 +47,145 @@ export default function CadastrarCriancaScreen() {
     const [sensibilidades, setSensibilidades] = useState('');
     const [observacoes, setObservacoes] = useState('');
 
-    function formatarData(texto: string) {
-        const numeros = texto.replace(/\D/g, '').slice(0, 8);
+    async function enviarFotoCrianca(uri: string, uid: string) {
+        const usuarioAtual = auth.currentUser;
+        if (!usuarioAtual || usuarioAtual.uid !== uid) {
+            throw new Error('Usuário não autorizado.');
+        }
+        const token = await usuarioAtual.getIdToken();
+        const resposta = await FileSystem.uploadAsync(
+            'https://teajudo-api.onrender.com/fotos/crianca',
+            uri,
+            {
+                httpMethod: 'POST',
+                uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+                fieldName: 'foto',
+                mimeType: 'image/jpeg',
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        );
+        if (resposta.status < 200 || resposta.status >= 300) {
+            throw new Error('Não foi possível enviar a foto.');
+        }
+        const dados = JSON.parse(resposta.body);
+        if (typeof dados.fotoUrl !== 'string' || !dados.fotoUrl) {
+            throw new Error('O servidor não retornou a foto.');
+        }
+        await setDoc(
+            doc(db, 'usuarios', uid, 'crianca', 'dados'),
+            { fotoUrl: dados.fotoUrl },
+            { merge: true }
+        );
+    }
+
+    async function escolherFotoCrianca() {
+        const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissao.granted) {
+            Alert.alert('Permissão necessária', 'Permita acesso à galeria para escolher uma foto.');
+            return;
+        }
+        const resultado = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+        if (!resultado.canceled && resultado.assets.length > 0) {
+            setFotoCrianca(resultado.assets[0].uri);
+        }
+    }
+
+function formatarData(texto: string) {
+        const numeros = texto
+            .replace(/\D/g, '')
+            .slice(0, 8);
 
         if (numeros.length <= 2) {
             return numeros;
         }
 
         if (numeros.length <= 4) {
-            return `${numeros.slice(0, 2)}/${numeros.slice(2)}`;
+            return `${numeros.slice(
+                0,
+                2
+            )}/${numeros.slice(2)}`;
         }
 
-        return `${numeros.slice(0, 2)}/${numeros.slice(
+        return `${numeros.slice(
+            0,
+            2
+        )}/${numeros.slice(
             2,
             4
         )}/${numeros.slice(4)}`;
     }
 
-    async function salvarCrianca() {
+        async function salvarCrianca() {
+        if (salvando) return;
         if (!nome.trim()) {
-            Alert.alert(
-                'Campo obrigatório',
-                'Informe o nome da criança.'
-            );
+            Alert.alert('Campo obrigatório', 'Informe o nome da criança.');
             return;
         }
-
-        if (!dataNascimento.trim()) {
-            Alert.alert(
-                'Campo obrigatório',
-                'Informe a data de nascimento.'
-            );
-            return;
-        }
-
         if (dataNascimento.length !== 10) {
-            Alert.alert(
-                'Data inválida',
-                'Informe a data no formato DD/MM/AAAA.'
-            );
+            Alert.alert('Data inválida', 'Informe a data no formato DD/MM/AAAA.');
             return;
         }
-
-        const crianca: Crianca = {
-            nome: nome.trim(),
-            apelido: apelido.trim(),
-            dataNascimento: dataNascimento.trim(),
-            sexo,
-            escola: escola.trim(),
-            comunicacao: comunicacao.trim(),
-            preferencias: preferencias.trim(),
-            sensibilidades: sensibilidades.trim(),
-            observacoes: observacoes.trim(),
-        };
-
+        const usuario = auth.currentUser;
+        if (!usuario) {
+            Alert.alert('Erro', 'Você precisa estar conectada.');
+            return;
+        }
+        setSalvando(true);
         try {
-            const usuario = auth.currentUser;
-
-            if (!usuario) {
-                Alert.alert(
-                    'Erro',
-                    'Você precisa estar conectada para cadastrar a criança.'
-                );
-                return;
-            }
-
             await setDoc(
-                doc(
-                    db,
-                    'usuarios',
-                    usuario.uid,
-                    'crianca',
-                    'dados'
-                ),
-                crianca
+                doc(db, 'usuarios', usuario.uid, 'crianca', 'dados'),
+                {
+                    nome: nome.trim(),
+                    apelido: apelido.trim(),
+                    dataNascimento: dataNascimento.trim(),
+                    sexo,
+                    escola: escola.trim(),
+                    comunicacao: comunicacao.trim(),
+                    preferencias: preferencias.trim(),
+                    sensibilidades: sensibilidades.trim(),
+                    observacoes: observacoes.trim(),
+                },
+                { merge: true }
             );
-
+            if (fotoCrianca) {
+                try {
+                    await enviarFotoCrianca(fotoCrianca, usuario.uid);
+                } catch (erroFoto) {
+                    console.log('Erro ao enviar foto:', erroFoto);
+                    Alert.alert(
+                        'Cadastro salvo sem foto',
+                        'As informações foram salvas, mas não foi possível enviar a foto. Você pode adicioná-la depois em Cadastrar criança.',
+                        [{ text: 'OK', onPress: () => router.replace('/minha-crianca') }]
+                    );
+                    return;
+                }
+            }
             Alert.alert(
                 'Cadastro realizado! 💙',
                 'As informações da criança foram salvas com sucesso.',
-                [
-                    {
-                        text: 'OK',
-                        onPress: () =>
-                            router.replace('/minha-crianca'),
-                    },
-                ]
+                [{ text: 'OK', onPress: () => router.replace('/minha-crianca') }]
             );
         } catch (erro) {
-            console.log('Erro ao salvar criança:', erro);
-
-            Alert.alert(
-                'Erro',
-                'Não foi possível salvar as informações.'
-            );
+            console.log('Erro ao cadastrar criança:', erro);
+            Alert.alert('Erro', 'Não foi possível salvar as informações.');
+        } finally {
+            setSalvando(false);
         }
     }
 
-    return (
+return (
         <SafeAreaView style={styles.container}>
+            <View pointerEvents="none" style={styles.decoracaoFundo}>
+                <View style={styles.manchaRosaTopo} />
+                <View style={styles.manchaAzulTopo} />
+                <View style={styles.manchaRosaBaixo} />
+                <View style={styles.manchaAzulBaixo} />
+            </View>
             <KeyboardAvoidingView
                 style={styles.flex}
                 behavior={
@@ -160,22 +205,27 @@ export default function CadastrarCriancaScreen() {
                             style={styles.botaoVoltar}
                             onPress={() => router.back()}
                         >
-                            <Text style={styles.seta}>‹</Text>
+                            <Ionicons
+                                name="chevron-back"
+                                size={22}
+                                color="#42A5D5"
+                            />
                         </Pressable>
 
                         <Text style={styles.tituloCabecalho}>
                             Cadastrar criança
                         </Text>
 
-                        <Text style={styles.estrela}>★</Text>
+                        <View style={{ width: 36 }} />
                     </View>
-
-                    {/* APRESENTAÇÃO */}
+{/* APRESENTAÇÃO */}
                     <View style={styles.apresentacao}>
                         <View style={styles.iconeApresentacao}>
-                            <Text style={styles.emojiApresentacao}>
-                                👧🏻
-                            </Text>
+                            <Ionicons
+                                name="person-add-outline"
+                                size={24}
+                                color="#FF7FA3"
+                            />
                         </View>
 
                         <View style={styles.textoApresentacao}>
@@ -185,22 +235,46 @@ export default function CadastrarCriancaScreen() {
 
                             <Text style={styles.subtituloApresentacao}>
                                 Registre informações importantes para
-                                facilitar o acompanhamento no dia a dia.
+                                acompanhar a criança no dia a dia.
                             </Text>
                         </View>
                     </View>
-
+                    <Pressable
+                         style={styles.avatarCrianca}
+                         onPress={() => {
+                             if (!fotoCrianca) {
+                                 escolherFotoCrianca();
+                             } else {
+                                 Alert.alert('Foto da criança', 'O que deseja fazer?', [
+                                     { text: 'Trocar foto', onPress: escolherFotoCrianca },
+                                     { text: 'Remover foto', style: 'destructive', onPress: () => setFotoCrianca(null) },
+                                     { text: 'Cancelar', style: 'cancel' },
+                                 ]);
+                             }
+                         }}
+                     >
+                         {fotoCrianca ? (
+                             <Image source={{ uri: fotoCrianca }} style={styles.fotoCrianca} />
+                         ) : (
+                             <Ionicons name="camera-outline" size={30} color="#42A5D5" />
+                         )}
+                     </Pressable>
+                     <Text style={styles.textoAlterarFoto}>
+                         {fotoCrianca ? 'Toque para trocar ou remover a foto' : 'Toque para adicionar uma foto (opcional)'}
+                     </Text>
                     {/* DADOS BÁSICOS */}
                     <Text style={styles.tituloSecao}>
                         Dados básicos
                     </Text>
 
                     <View style={styles.card}>
-                        <Text style={styles.label}>Nome *</Text>
+                        <Text style={styles.label}>
+                            Nome *
+                        </Text>
 
                         <TextInput
                             style={styles.input}
-                            placeholder="Ex.: Ana Beatriz"
+                            placeholder="Nome da criança"
                             placeholderTextColor="#A1AAAE"
                             value={nome}
                             onChangeText={setNome}
@@ -212,7 +286,7 @@ export default function CadastrarCriancaScreen() {
 
                         <TextInput
                             style={styles.input}
-                            placeholder="Ex.: Bia"
+                            placeholder="Apelido ou nome preferido"
                             placeholderTextColor="#A1AAAE"
                             value={apelido}
                             onChangeText={setApelido}
@@ -222,13 +296,15 @@ export default function CadastrarCriancaScreen() {
                             Data de nascimento *
                         </Text>
 
-                        <TextInput
+<TextInput
                             style={styles.input}
                             placeholder="DD/MM/AAAA"
                             placeholderTextColor="#A1AAAE"
                             value={dataNascimento}
                             onChangeText={(texto) =>
-                                setDataNascimento(formatarData(texto))
+                                setDataNascimento(
+                                    formatarData(texto)
+                                )
                             }
                             keyboardType="number-pad"
                             maxLength={10}
@@ -245,7 +321,11 @@ export default function CadastrarCriancaScreen() {
                                 ]}
                                 onPress={() => setSexo('Menina')}
                             >
-                                <Text style={styles.emojiSexo}>👧</Text>
+                                <Ionicons
+                                    name="female-outline"
+                                    size={23}
+                                    color={sexo === 'Menina' ? '#FF7FA3' : '#42A5D5'}
+                                />
                                 <Text style={styles.textoSexo}>Menina</Text>
                             </Pressable>
 
@@ -256,7 +336,11 @@ export default function CadastrarCriancaScreen() {
                                 ]}
                                 onPress={() => setSexo('Menino')}
                             >
-                                <Text style={styles.emojiSexo}>👦</Text>
+                                <Ionicons
+                                    name="male-outline"
+                                    size={23}
+                                    color={sexo === 'Menino' ? '#FF7FA3' : '#42A5D5'}
+                                />
                                 <Text style={styles.textoSexo}>Menino</Text>
                             </Pressable>
 
@@ -268,35 +352,48 @@ export default function CadastrarCriancaScreen() {
                                 ]}
                                 onPress={() => setSexo('Prefiro não identificar')}
                             >
-                                <Text style={styles.emojiSexo}>👶</Text>
+                                <Ionicons
+                                    name="person-outline"
+                                    size={23}
+                                    color={
+                                        sexo === 'Prefiro não identificar'
+                                            ? '#FF7FA3'
+                                            : '#42A5D5'
+                                    }
+                                />
                                 <Text style={styles.textoSexo}>
                                     Prefiro não identificar
                                 </Text>
                             </Pressable>
                         </View>
-
-                        <Text style={styles.label}>Escola</Text>
+                        <Text style={styles.label}>
+                            Escola
+                        </Text>
 
                         <TextInput
                             style={[
                                 styles.input,
                                 styles.inputUltimo,
                             ]}
-                            placeholder="Ex.: Escola Caminhos"
+                            placeholder="Nome da escola"
                             placeholderTextColor="#A1AAAE"
                             value={escola}
                             onChangeText={setEscola}
                         />
                     </View>
-
-                    {/* COMUNICAÇÃO */}
+{/* COMUNICAÇÃO */}
                     <Text style={styles.tituloSecao}>
                         Comunicação
                     </Text>
 
                     <View style={styles.card}>
                         <View style={styles.cabecalhoCampo}>
-                            <Text style={styles.emojiCampo}>💬</Text>
+                            <Ionicons
+                                name="chatbubble-ellipses-outline"
+                                size={23}
+                                color="#42A5D5"
+                                style={{ marginRight: 10 }}
+                            />
 
                             <View style={styles.textoCampo}>
                                 <Text style={styles.labelSemMargem}>
@@ -304,8 +401,8 @@ export default function CadastrarCriancaScreen() {
                                 </Text>
 
                                 <Text style={styles.ajudaCampo}>
-                                    Você pode registrar fala, gestos,
-                                    comunicação alternativa ou outras formas.
+                                    Fala, gestos, comunicação alternativa
+                                    ou outras formas.
                                 </Text>
                             </View>
                         </View>
@@ -328,7 +425,12 @@ export default function CadastrarCriancaScreen() {
 
                     <View style={styles.card}>
                         <View style={styles.cabecalhoCampo}>
-                            <Text style={styles.emojiCampo}>💗</Text>
+                            <Ionicons
+                                name="heart-outline"
+                                size={23}
+                                color="#FF7FA3"
+                                style={{ marginRight: 10 }}
+                            />
 
                             <View style={styles.textoCampo}>
                                 <Text style={styles.labelSemMargem}>
@@ -336,15 +438,15 @@ export default function CadastrarCriancaScreen() {
                                 </Text>
 
                                 <Text style={styles.ajudaCampo}>
-                                    Brinquedos, alimentos, personagens,
-                                    atividades, assuntos ou formas de conforto.
+                                    Interesses, atividades, alimentos,
+                                    personagens e formas de conforto.
                                 </Text>
                             </View>
                         </View>
 
                         <TextInput
                             style={styles.areaTexto}
-                            placeholder="Ex.: gosta de música, desenhos e blocos..."
+                            placeholder="Descreva as preferências..."
                             placeholderTextColor="#A1AAAE"
                             value={preferencias}
                             onChangeText={setPreferencias}
@@ -352,7 +454,6 @@ export default function CadastrarCriancaScreen() {
                             textAlignVertical="top"
                         />
                     </View>
-
                     {/* SENSIBILIDADES */}
                     <Text style={styles.tituloSecao}>
                         Sensibilidades
@@ -360,7 +461,12 @@ export default function CadastrarCriancaScreen() {
 
                     <View style={styles.card}>
                         <View style={styles.cabecalhoCampo}>
-                            <Text style={styles.emojiCampo}>🧩</Text>
+                            <Ionicons
+                                name="options-outline"
+                                size={23}
+                                color="#42A5D5"
+                                style={{ marginRight: 10 }}
+                            />
 
                             <View style={styles.textoCampo}>
                                 <Text style={styles.labelSemMargem}>
@@ -368,15 +474,15 @@ export default function CadastrarCriancaScreen() {
                                 </Text>
 
                                 <Text style={styles.ajudaCampo}>
-                                    Registre estímulos ou situações que podem
-                                    causar desconforto.
+                                    Estímulos e situações que podem causar
+                                    desconforto.
                                 </Text>
                             </View>
                         </View>
 
                         <TextInput
                             style={styles.areaTexto}
-                            placeholder="Ex.: sons muito altos, ambientes cheios..."
+                            placeholder="Descreva as sensibilidades..."
                             placeholderTextColor="#A1AAAE"
                             value={sensibilidades}
                             onChangeText={setSensibilidades}
@@ -392,7 +498,12 @@ export default function CadastrarCriancaScreen() {
 
                     <View style={styles.card}>
                         <View style={styles.cabecalhoCampo}>
-                            <Text style={styles.emojiCampo}>⭐</Text>
+                            <Ionicons
+                                name="document-text-outline"
+                                size={23}
+                                color="#FF7FA3"
+                                style={{ marginRight: 10 }}
+                            />
 
                             <View style={styles.textoCampo}>
                                 <Text style={styles.labelSemMargem}>
@@ -400,15 +511,15 @@ export default function CadastrarCriancaScreen() {
                                 </Text>
 
                                 <Text style={styles.ajudaCampo}>
-                                    Acrescente outras informações que possam
-                                    ajudar no acompanhamento.
+                                    Outras informações úteis para o
+                                    acompanhamento.
                                 </Text>
                             </View>
                         </View>
 
                         <TextInput
                             style={styles.areaTexto}
-                            placeholder="Adicione alguma informação importante..."
+                            placeholder="Adicione alguma informação..."
                             placeholderTextColor="#A1AAAE"
                             value={observacoes}
                             onChangeText={setObservacoes}
@@ -424,18 +535,13 @@ export default function CadastrarCriancaScreen() {
                     <Pressable
                         style={styles.botaoSalvar}
                         onPress={salvarCrianca}
+                         disabled={salvando}
                     >
                         <Text style={styles.textoBotaoSalvar}>
-                            Salvar informações
+                            {salvando ? 'Salvando...' : 'Salvar informações'}
                         </Text>
                     </Pressable>
-
-                    <View style={styles.decoracao}>
-                        <Text style={styles.decoracaoEmoji}>🧩</Text>
-                        <Text style={styles.coracao}>♥</Text>
-                        <Text style={styles.decoracaoEmoji}>🌈</Text>
-                    </View>
-                </ScrollView>
+                    </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -444,7 +550,7 @@ export default function CadastrarCriancaScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#DDF3FA',
+        backgroundColor: '#F9FCFD',
     },
 
     flex: {
@@ -454,6 +560,20 @@ const styles = StyleSheet.create({
     conteudo: {
         paddingHorizontal: 18,
         paddingBottom: 35,
+    },
+
+    carregando: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+
+
+    textoCarregando: {
+        color: '#64747B',
+        fontSize: 13,
+        fontWeight: '600',
     },
 
     cabecalho: {
@@ -493,8 +613,7 @@ const styles = StyleSheet.create({
         fontSize: 29,
         textAlign: 'center',
     },
-
-    apresentacao: {
+ apresentacao: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
@@ -507,14 +626,14 @@ const styles = StyleSheet.create({
         width: 58,
         height: 58,
         borderRadius: 18,
-        backgroundColor: '#E8F7FB',
+        backgroundColor: '#F8DCE7',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
     },
 
     emojiApresentacao: {
-        fontSize: 31,
+        fontSize: 29,
     },
 
     textoApresentacao: {
@@ -573,8 +692,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginBottom: 15,
     },
-
-    inputUltimo: {
+     inputUltimo: {
         marginBottom: 0,
     },
 
@@ -584,10 +702,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
 
-    emojiCampo: {
-        fontSize: 25,
-        marginRight: 10,
-    },
+
 
     textoCampo: {
         flex: 1,
@@ -623,7 +738,7 @@ const styles = StyleSheet.create({
     botaoSalvar: {
         height: 54,
         borderRadius: 16,
-        backgroundColor: '#FF7FA3',
+        backgroundColor: '#42A5D5',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -634,21 +749,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
 
-    decoracao: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        marginTop: 20,
-    },
 
-    decoracaoEmoji: {
-        fontSize: 30,
-    },
-
-    coracao: {
-        color: '#FF8FB1',
-        fontSize: 30,
-    },
     opcoesSexo: {
         flexDirection: 'row',
         gap: 8,
@@ -667,7 +768,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 5,
         paddingVertical: 8,
     },
-
     opcaoSexoSelecionada: {
         backgroundColor: '#E8F7FB',
         borderColor: '#4288AF',
@@ -684,5 +784,84 @@ const styles = StyleSheet.create({
         fontSize: 9,
         fontWeight: '600',
         textAlign: 'center',
+    },
+    avatarCrianca: {
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        backgroundColor: '#FFFFFF',
+        alignSelf: 'center',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        marginTop: 15,
+    },
+
+    fotoCrianca: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 45,
+    },
+
+
+
+    textoAlterarFoto: {
+        color: '#4288AF',
+        fontSize: 11,
+        textAlign: 'center',
+        marginTop: 7,
+        marginBottom: 20,
+    },
+    decoracaoFundo: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: 'hidden',
+    },
+
+    manchaRosaTopo: {
+        position: 'absolute',
+        width: 270,
+        height: 210,
+        borderRadius: 140,
+        backgroundColor: '#FFE8F0',
+        top: -105,
+        left: -85,
+        opacity: 0.85,
+    },
+
+    manchaAzulTopo: {
+        position: 'absolute',
+        width: 290,
+        height: 210,
+        borderRadius: 150,
+        backgroundColor: '#E2F5FC',
+        top: -115,
+        right: -100,
+        opacity: 0.9,
+    },
+
+    manchaRosaBaixo: {
+        position: 'absolute',
+        width: 350,
+        height: 230,
+        borderRadius: 180,
+        backgroundColor: '#FFE5EE',
+        bottom: -110,
+        left: -130,
+        opacity: 0.8,
+    },
+
+    manchaAzulBaixo: {
+        position: 'absolute',
+        width: 360,
+        height: 230,
+        borderRadius: 190,
+        backgroundColor: '#DCF3FC',
+        bottom: -120,
+        right: -150,
+        opacity: 0.85,
     },
 });

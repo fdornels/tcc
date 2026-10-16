@@ -119,11 +119,11 @@ export default function ConfiguracoesScreen() {
         }
 
         const uri = resultado.assets[0].uri;
+        
 
         const token = await usuarioAtual.getIdToken();
 
-        const enderecoServidor =
-    'http://172.20.10.8:3001';
+        const enderecoServidor = 'https://teajudo-api.onrender.com';
 
         const resposta = await FileSystem.uploadAsync(
             `${enderecoServidor}/fotos/responsavel`,
@@ -209,7 +209,13 @@ export default function ConfiguracoesScreen() {
                                 });
                             }
 
-                            setFotoPerfil(null);
+                            await setDoc(
+    doc(db, 'usuarios', usuarioAtual.uid),
+    { fotoPerfilUrl: '' },
+    { merge: true }
+);
+
+setFotoPerfil(null);
                         } catch (erro) {
                             console.log(
                                 'Erro ao excluir foto:',

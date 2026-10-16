@@ -22,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { db } from '../../config/firebase';
+import { calcularIdade } from '../utils/calcularIdade';
 
 type Crianca = {
     responsavelId?: string;
@@ -245,7 +246,18 @@ export default function AdminCriancasScreen() {
                                 <Text style={styles.nome}>
                                     {crianca.nome || 'Sem nome'}
                                 </Text>
-
+{calcularIdade(crianca.dataNascimento ?? '') !== null && (
+    <View style={styles.linhaDetalhe}>
+        <Ionicons
+            name="time-outline"
+            size={14}
+            color="#8B979C"
+        />
+        <Text style={styles.detalhe}>
+            {calcularIdade(crianca.dataNascimento ?? '')} anos
+        </Text>
+    </View>
+)}
                                 {crianca.apelido ? (
                                     <View style={styles.linhaDetalhe}>
                                         <Ionicons

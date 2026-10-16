@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
@@ -16,7 +16,32 @@ import { auth, db } from '../../config/firebase';
 export default function AdminScreen() {
     const [verificando, setVerificando] = useState(true);
     const [ehAdmin, setEhAdmin] = useState(false);
+    const [totalOrientacoes, setTotalOrientacoes] = useState(0);
+const [totalCategorias, setTotalCategorias] = useState(0);
+async function carregarResumo() {
+    try {
+        const resultado = await getDocs(
+            collection(db, 'orientacoes')
+        );
 
+        setTotalOrientacoes(resultado.size);
+
+        const categorias = new Set(
+            resultado.docs
+                .map((documento) => documento.data().categoria)
+                .filter(
+                    (categoria) =>
+                        typeof categoria === 'string' &&
+                        categoria.trim() !== ''
+                )
+                .map((categoria) => categoria.trim().toLowerCase())
+        );
+
+        setTotalCategorias(categorias.size);
+    } catch (erro) {
+        console.log('Erro ao carregar resumo:', erro);
+    }
+}
     async function verificarAdmin() {
         try {
             setVerificando(true);
@@ -56,10 +81,11 @@ export default function AdminScreen() {
     }
 
     useFocusEffect(
-        useCallback(() => {
-            verificarAdmin();
-        }, [])
-    );
+    useCallback(() => {
+        verificarAdmin();
+        carregarResumo();
+    }, [])
+);
 
     if (verificando || !ehAdmin) {
         return (
@@ -256,14 +282,18 @@ export default function AdminScreen() {
 
                 <View style={styles.resumo}>
                     <View style={styles.cardResumo}>
-                        <Text style={styles.numeroResumo}>12</Text>
+                        <Text style={styles.numeroResumo}>
+    {totalOrientacoes}
+</Text>
                         <Text style={styles.textoResumo}>
                             Orientações
                         </Text>
                     </View>
 
                     <View style={styles.cardResumo}>
-                        <Text style={styles.numeroResumo}>4</Text>
+                        <Text style={styles.numeroResumo}>
+    {totalCategorias}
+</Text>
                         <Text style={styles.textoResumo}>
                             Categorias
                         </Text>

@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
 import { auth, db } from '../../config/firebase';
+import { calcularIdade } from '../utils/calcularIdade';
 
 import {
     Alert,
@@ -106,7 +107,7 @@ export default function MinhaCriancaScreen() {
 const token = await usuario.getIdToken();
 
 const resposta = await fetch(
-  'http://10.0.2.2:3001/fotos/crianca',
+  'https://teajudo-api.onrender.com/fotos/crianca',
   {
     method: 'DELETE',
     headers: {
@@ -270,7 +271,11 @@ setFotoCrianca(null);
                                     {crianca.nome}
                                 </Text>
                             ) : null}
-
+{calcularIdade(crianca.dataNascimento) !== null && (
+    <Text style={styles.nomeCompleto}>
+        {calcularIdade(crianca.dataNascimento)} anos
+    </Text>
+)}
                             <View style={styles.dataNascimento}>
                                 <Ionicons
                                     name="calendar-outline"

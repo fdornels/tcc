@@ -6,6 +6,8 @@ const cors = require('cors');
 const cloudinary = require('cloudinary').v2;
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
+const { getFirestore, Timestamp } = require('firebase-admin/firestore');
+const { randomBytes, createHash } = require('node:crypto');
 const multer = require('multer');
 
 const upload = multer({
@@ -66,7 +68,82 @@ async function verificarLogin(req, res, next) {
     });
   }
 }
+function gerarCodigoVinculacao() {
+  const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(8);
 
+  let codigo = '';
+
+  for (const byte of bytes) {
+    codigo += caracteres[byte % caracteres.length];
+  }
+
+  return codigo.slice(0, 4) + '-' + codigo.slice(4);
+}
+
+function hashCodigo(codigo) {
+  return createHash('sha256')
+    .update(codigo)
+    .digest('hex');
+}
+app.post('/vinculos/gerar-codigo', verificarLogin, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+    const banco = getFirestore();
+
+    const usuarioDoc = await banco
+      .collection('usuarios')
+      .doc(uid)
+      .get();
+
+    if (
+      !usuarioDoc.exists ||
+      usuarioDoc.data().tipoConta !== 'responsavel'
+    ) {
+      return res.status(403).json({
+        erro: 'Apenas responsáveis podem gerar códigos.',
+      });
+    }
+
+    const criancaDoc = await banco
+      .collection('usuarios')
+      .doc(uid)
+      .collection('crianca')
+      .doc('dados')
+      .get();
+
+    if (!criancaDoc.exists) {
+      return res.status(404).json({
+        erro: 'Nenhuma criança cadastrada.',
+      });
+    }
+
+    const codigo = gerarCodigoVinculacao();
+
+    const expiraEm = Date.now() + 15 * 60 * 1000;
+
+    await banco
+      .collection('codigosVinculacao')
+      .doc(hashCodigo(codigo))
+      .create({
+        responsavelUid: uid,
+        criadoEm: Timestamp.now(),
+        expiraEm: Timestamp.fromMillis(expiraEm),
+        utilizado: false,
+      });
+
+    return res.json({
+      codigo,
+      expiraEm,
+    });
+  } catch (erro) {
+    console.error('Erro ao gerar código:', erro);
+
+    return res.status(500).json({
+      erro: 'Não foi possível gerar o código.',
+    });
+  }
+});
 app.get('/teste-autenticacao', verificarLogin, (req, res) => {
   res.json({
     mensagem: 'Autenticação funcionando!',

@@ -57,7 +57,7 @@ async function enviarFotoCrianca(uri: string, uid: string) {
   const token = await usuarioAtual.getIdToken();
 
   const resposta = await FileSystem.uploadAsync(
-    'http://172.20.10.8:3001/fotos/crianca',
+    'https://teajudo-api.onrender.com/fotos/crianca',
     uri,
     {
       httpMethod: 'POST',
@@ -172,7 +172,7 @@ async function escolherFotoCrianca() {
 
 const token = await usuarioAtual.getIdToken();
 const resposta = await fetch(
- 'http://172.20.10.8:3001/fotos/crianca',
+ 'https://teajudo-api.onrender.com/fotos/crianca',
   {
     method: 'DELETE',
     headers: {

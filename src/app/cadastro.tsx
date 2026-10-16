@@ -19,11 +19,15 @@ import {
     View,
 } from 'react-native';
 
+import { doc, setDoc } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 
 export default function CadastroScreen() {
     const [nome, setNome] = useState('');
+    const [tipoConta, setTipoConta] = useState<
+    'responsavel' | 'profissional'
+>('responsavel');
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
     const [confirmarSenha, setConfirmarSenha] = useState('');
@@ -84,6 +88,16 @@ export default function CadastroScreen() {
             await updateProfile(credencial.user, {
                 displayName: nomeLimpo,
             });
+            await setDoc(
+    doc(db, 'usuarios', credencial.user.uid),
+    {
+        nome: nomeLimpo,
+        email: emailLimpo,
+        tipoConta: tipoConta,
+        profissionalVerificado: false,
+    },
+    { merge: true }
+);
 
             Alert.alert(
                 'Conta criada! 💙',
@@ -91,7 +105,13 @@ export default function CadastroScreen() {
                 [
                     {
                         text: 'Continuar',
-                        onPress: () => router.replace('/home'),
+                        onPress: () => {
+    if (tipoConta === 'profissional') {
+        router.replace('/area-profissional');
+    } else {
+        router.replace('/home');
+    }
+},
                     },
                 ]
             );
@@ -205,6 +225,59 @@ export default function CadastroScreen() {
 
                     {/* Formulário */}
                     <View style={styles.cardFormulario}>
+                        <Text style={styles.label}>
+    Como você deseja utilizar o (TE)Ajudo?
+</Text>
+
+<View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+    <Pressable
+        onPress={() => setTipoConta('responsavel')}
+        style={{
+            flex: 1,
+            paddingVertical: 15,
+            borderRadius: 13,
+            alignItems: 'center',
+            borderWidth: 1.5,
+            borderColor:
+                tipoConta === 'responsavel' ? '#FF8FB1' : '#E5EFF3',
+            backgroundColor:
+                tipoConta === 'responsavel' ? '#FFF0F5' : '#FAFCFD',
+        }}
+    >
+        <Ionicons
+            name="heart-outline"
+            size={23}
+            color="#E46B98"
+        />
+        <Text style={{ color: '#30475D', marginTop: 6, fontWeight: '600' }}>
+            Responsável
+        </Text>
+    </Pressable>
+
+    <Pressable
+        onPress={() => setTipoConta('profissional')}
+        style={{
+            flex: 1,
+            paddingVertical: 15,
+            borderRadius: 13,
+            alignItems: 'center',
+            borderWidth: 1.5,
+            borderColor:
+                tipoConta === 'profissional' ? '#42A5D5' : '#E5EFF3',
+            backgroundColor:
+                tipoConta === 'profissional' ? '#EBF8FF' : '#FAFCFD',
+        }}
+    >
+        <Ionicons
+            name="medkit-outline"
+            size={23}
+            color="#42A5D5"
+        />
+        <Text style={{ color: '#30475D', marginTop: 6, fontWeight: '600' }}>
+            Profissional
+        </Text>
+    </Pressable>
+</View>
 
                         <Text style={styles.label}>
                             Seu nome

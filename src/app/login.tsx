@@ -16,8 +16,9 @@ import {
     View,
 } from 'react-native';
 
+import { doc, getDoc } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
@@ -39,13 +40,30 @@ export default function LoginScreen() {
         try {
             setCarregando(true);
 
-            await signInWithEmailAndPassword(
-                auth,
-                emailLimpo,
-                senha
-            );
+            const credencial = await signInWithEmailAndPassword(
+    auth,
+    emailLimpo,
+    senha
+);
 
-            router.replace('/home');
+const usuarioRef = doc(
+    db,
+    'usuarios',
+    credencial.user.uid
+);
+
+const usuarioSnap = await getDoc(usuarioRef);
+
+if (usuarioSnap.exists()) {
+    const dados = usuarioSnap.data();
+
+    if (dados.tipoConta === 'profissional') {
+        router.replace('/area-profissional');
+        return;
+    }
+}
+
+router.replace('/home');
         } catch (erro: any) {
             console.log('Erro no login:', erro);
 
