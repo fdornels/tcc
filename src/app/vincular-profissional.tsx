@@ -1,16 +1,64 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
+    Pressable,
     StyleSheet,
     Text,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { auth } from '../../config/firebase';
 
 export default function VincularProfissional() {
     const [codigo, setCodigo] = useState('');
 const [gerando, setGerando] = useState(false);
+type Solicitacao = {
+    id: string;
+    nomeProfissional: string;
+    status: string;
+};
+
+const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
+const [carregandoSolicitacoes, setCarregandoSolicitacoes] = useState(false);
+const carregarSolicitacoes = useCallback(async () => {
+    try {
+        setCarregandoSolicitacoes(true);
+
+        const usuario = auth.currentUser;
+        if (!usuario) return;
+
+        const token = await usuario.getIdToken();
+
+        const resposta = await fetch(
+            'https://teajudo-api.onrender.com/vinculos/solicitacoes',
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(
+                dados.erro || 'Erro ao buscar solicitações.'
+            );
+        }
+
+        setSolicitacoes(dados.solicitacoes || []);
+    } catch (erro) {
+        console.log('Erro ao carregar solicitações:', erro);
+    } finally {
+        setCarregandoSolicitacoes(false);
+    }
+}, []);
+useFocusEffect(
+    useCallback(() => {
+        carregarSolicitacoes();
+    }, [carregarSolicitacoes])
+);
 async function gerarCodigo() {
     if (gerando) return;
 
@@ -91,7 +139,42 @@ async function gerarCodigo() {
     </View>
 )}
 
-            <Text
+            <View style={styles.secaoSolicitacoes}>
+    <Text style={styles.tituloSecao}>
+        Solicitações pendentes
+    </Text>
+
+    {carregandoSolicitacoes ? (
+        <Text style={styles.mensagemSolicitacoes}>
+            Carregando solicitações...
+        </Text>
+    ) : solicitacoes.length === 0 ? (
+        <Text style={styles.mensagemSolicitacoes}>
+            Nenhuma solicitação pendente.
+        </Text>
+    ) : (
+        solicitacoes.map((solicitacao) => (
+            <View
+                key={solicitacao.id}
+                style={styles.cardSolicitacao}
+            >
+                <Ionicons
+                    name="person-circle-outline"
+                    size={30}
+                    color="#42A5D5"
+                />
+
+                <Text style={styles.nomeProfissional}>
+                    {solicitacao.nomeProfissional}
+                </Text>
+
+                <Text style={styles.statusSolicitacao}>
+                    Aguardando sua autorização
+                </Text>
+            </View>
+        ))
+    )}
+</View><Text
                 style={styles.voltar}
                 onPress={() => router.back()}
             >
@@ -144,7 +227,46 @@ validade: {
     color: '#E46B98',
     marginTop: 10,
 },
-    container: {
+    secaoSolicitacoes: {
+    width: '100%',
+    marginTop: 25,
+},
+
+tituloSecao: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#30475D',
+    marginBottom: 12,
+},
+
+mensagemSolicitacoes: {
+    fontSize: 13,
+    color: '#8196A3',
+    textAlign: 'center',
+    marginVertical: 15,
+},
+
+cardSolicitacao: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    marginBottom: 12,
+},
+
+nomeProfissional: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#30475D',
+    marginTop: 8,
+},
+
+statusSolicitacao: {
+    fontSize: 12,
+    color: '#8196A3',
+    marginTop: 5,
+},
+container: {
         flex: 1,
         backgroundColor: '#F9FCFD',
         alignItems: 'center',

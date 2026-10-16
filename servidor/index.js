@@ -231,6 +231,62 @@ app.post('/vinculos/solicitar', verificarLogin, async (req, res) => {
     });
   }
 });
+// Listar solicitações pendentes do responsável
+app.get('/vinculos/solicitacoes', verificarLogin, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+    const banco = getFirestore();
+
+    const usuarioDoc = await banco
+      .collection('usuarios')
+      .doc(uid)
+      .get();
+
+    if (
+      !usuarioDoc.exists ||
+      usuarioDoc.data().tipoConta !== 'responsavel'
+    ) {
+      return res.status(403).json({
+        erro: 'Acesso permitido apenas para responsáveis.',
+      });
+    }
+
+    const resultado = await banco
+      .collection('solicitacoesVinculo')
+      .where('responsavelUid', '==', uid)
+      .where('status', '==', 'pendente')
+      .get();
+
+    const solicitacoes = [];
+
+    for (const documento of resultado.docs) {
+      const dados = documento.data();
+
+      const profissionalDoc = await banco
+        .collection('usuarios')
+        .doc(dados.profissionalUid)
+        .get();
+
+      const profissional = profissionalDoc.exists
+        ? profissionalDoc.data()
+        : {};
+
+      solicitacoes.push({
+        id: documento.id,
+        nomeProfissional: profissional.nome || 'Profissional',
+        status: dados.status,
+      });
+    }
+
+    return res.json({ solicitacoes });
+  } catch (erro) {
+    console.error('Erro ao listar solicitações:', erro);
+
+    return res.status(500).json({
+      erro: 'Não foi possível carregar as solicitações.',
+    });
+  }
+});
 app.get('/teste-autenticacao', verificarLogin, (req, res) => {
   res.json({
     mensagem: 'Autenticação funcionando!',
