@@ -413,7 +413,22 @@ setFotoCrianca(null);
                                 Editar informações
                             </Text>
                         </Pressable>
+{/* VINCULAR PROFISSIONAL */}
+<Pressable
+    style={styles.botaoVincular}
+    onPress={() => router.push('/vincular-profissional')}
+>
+    <Ionicons
+        name="people-outline"
+        size={20}
+        color="#FFFFFF"
+        style={{ marginRight: 8 }}
+    />
 
+    <Text style={styles.textoBotaoEditar}>
+        Vincular profissional
+    </Text>
+</Pressable>
                         {/* BOTÃO EXCLUIR */}
                         <Pressable
                             style={styles.botaoExcluir}
@@ -1013,7 +1028,15 @@ const styles = StyleSheet.create({
         fontSize: 10,
         lineHeight: 16,
     },
-
+botaoVincular: {
+    height: 53,
+    borderRadius: 16,
+    backgroundColor: '#42A5D5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+},
     botaoEditar: {
         height: 53,
         borderRadius: 16,
