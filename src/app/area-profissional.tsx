@@ -64,11 +64,7 @@ export default function AreaProfissional() {
 
                 <TouchableOpacity
                     style={styles.botaoVincular}
-                    onPress={() => {
-                        alert(
-                            'Em breve você poderá vincular uma criança usando um código fornecido pela família.'
-                        );
-                    }}
+                    onPress={() => router.push('/solicitar-vinculo')}
                 >
                     <Ionicons
                         name="link-outline"

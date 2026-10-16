@@ -7,7 +7,7 @@ const cloudinary = require('cloudinary').v2;
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
-const { randomBytes, createHash } = require('node:crypto');
+const { randomBytes, createHash, randomInt } = require('node:crypto');
 const multer = require('multer');
 
 const upload = multer({
@@ -70,12 +70,11 @@ async function verificarLogin(req, res, next) {
 }
 function gerarCodigoVinculacao() {
   const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = randomBytes(8);
 
   let codigo = '';
 
-  for (const byte of bytes) {
-    codigo += caracteres[byte % caracteres.length];
+  for (let i = 0; i < 8; i++) {
+    codigo += caracteres[randomInt(caracteres.length)];
   }
 
   return codigo.slice(0, 4) + '-' + codigo.slice(4);
@@ -141,6 +140,94 @@ app.post('/vinculos/gerar-codigo', verificarLogin, async (req, res) => {
 
     return res.status(500).json({
       erro: 'Não foi possível gerar o código.',
+    });
+  }
+});
+app.post('/vinculos/solicitar', verificarLogin, async (req, res) => {
+  try {
+    const profissionalUid = req.usuario.uid;
+    const codigo = String(req.body.codigo || '').trim().toUpperCase();
+
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(codigo)) {
+      return res.status(400).json({
+        erro: 'Código inválido.',
+      });
+    }
+
+    const banco = getFirestore();
+
+    const profissionalDoc = await banco
+      .collection('usuarios')
+      .doc(profissionalUid)
+      .get();
+
+    if (
+      !profissionalDoc.exists ||
+      profissionalDoc.data().tipoConta !== 'profissional'
+    ) {
+      return res.status(403).json({
+        erro: 'Apenas profissionais podem solicitar vínculos.',
+      });
+    }
+
+    const codigoRef = banco
+      .collection('codigosVinculacao')
+      .doc(hashCodigo(codigo));
+
+    const solicitacaoRef = banco
+      .collection('solicitacoesVinculo')
+      .doc();
+
+    const resultado = await banco.runTransaction(async (transacao) => {
+      const codigoDoc = await transacao.get(codigoRef);
+
+      if (!codigoDoc.exists) {
+        return { erro: 'Código não encontrado ou inválido.', status: 404 };
+      }
+
+      const dados = codigoDoc.data();
+
+      if (
+        dados.utilizado ||
+        !dados.expiraEm ||
+        dados.expiraEm.toMillis() <= Date.now()
+      ) {
+        return { erro: 'Código expirado ou já utilizado.', status: 400 };
+      }
+
+      if (dados.responsavelUid === profissionalUid) {
+        return { erro: 'Não é possível vincular sua própria conta.', status: 400 };
+      }
+
+      transacao.update(codigoRef, {
+        utilizado: true,
+        utilizadoPor: profissionalUid,
+      });
+
+      transacao.set(solicitacaoRef, {
+        responsavelUid: dados.responsavelUid,
+        profissionalUid,
+        status: 'pendente',
+        criadoEm: Timestamp.now(),
+      });
+
+      return { sucesso: true };
+    });
+
+    if (resultado.erro) {
+      return res.status(resultado.status).json({
+        erro: resultado.erro,
+      });
+    }
+
+    return res.status(201).json({
+      mensagem: 'Solicitação enviada! Aguarde a aprovação do responsável.',
+    });
+  } catch (erro) {
+    console.error('Erro ao solicitar vínculo:', erro);
+
+    return res.status(500).json({
+      erro: 'Não foi possível solicitar o vínculo.',
     });
   }
 });
