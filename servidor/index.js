@@ -337,6 +337,237 @@ app.post('/vinculos/responder', verificarLogin, async (req, res) => {
     return res.status(500).json({ erro: 'Não foi possível responder.' });
   }
 });
+// Revogar acesso de um profissional
+app.post('/vinculos/revogar', verificarLogin, async (req, res) => {
+  try {
+    const responsavelUid = req.usuario.uid;
+    const { solicitacaoId } = req.body || {};
+
+    if (typeof solicitacaoId !== 'string' || !solicitacaoId.trim()) {
+      return res.status(400).json({
+        erro: 'Solicitação inválida.',
+      });
+    }
+
+    const banco = getFirestore();
+    const solicitacaoRef = banco
+      .collection('solicitacoesVinculo')
+      .doc(solicitacaoId);
+
+    const resultado = await banco.runTransaction(async (transacao) => {
+      const documento = await transacao.get(solicitacaoRef);
+
+      if (!documento.exists) {
+        return { status: 404, erro: 'Vínculo não encontrado.' };
+      }
+
+      const dados = documento.data();
+
+      if (dados.responsavelUid !== responsavelUid) {
+        return { status: 403, erro: 'Você não pode revogar este vínculo.' };
+      }
+
+      if (dados.status !== 'aprovado') {
+        return { status: 400, erro: 'Este vínculo não está ativo.' };
+      }
+
+      transacao.update(solicitacaoRef, {
+        status: 'revogado',
+        revogadoEm: Timestamp.now(),
+      });
+
+      return { sucesso: true };
+    });
+
+    if (resultado.erro) {
+      return res.status(resultado.status).json({
+        erro: resultado.erro,
+      });
+    }
+
+    return res.json({
+      mensagem: 'Acesso do profissional revogado com sucesso.',
+    });
+  } catch (erro) {
+    console.error('Erro ao revogar vínculo:', erro);
+
+    return res.status(500).json({
+      erro: 'Não foi possível revogar o acesso.',
+    });
+  }
+});
+// Listar profissionais autorizados pelo responsável
+app.get('/vinculos/aprovados', verificarLogin, async (req, res) => {
+  try {
+    const uid = req.usuario.uid;
+    const banco = getFirestore();
+
+    const usuarioDoc = await banco.collection('usuarios').doc(uid).get();
+
+    if (
+      !usuarioDoc.exists ||
+      usuarioDoc.data().tipoConta !== 'responsavel'
+    ) {
+      return res.status(403).json({
+        erro: 'Acesso permitido apenas para responsáveis.',
+      });
+    }
+
+    const resultado = await banco
+      .collection('solicitacoesVinculo')
+      .where('responsavelUid', '==', uid)
+      .where('status', '==', 'aprovado')
+      .get();
+
+    const profissionais = await Promise.all(
+      resultado.docs.map(async (documento) => {
+        const dados = documento.data();
+
+        const perfil = await banco
+          .collection('usuarios')
+          .doc(dados.profissionalUid)
+          .get();
+
+        return {
+          solicitacaoId: documento.id,
+          nome: perfil.exists
+            ? perfil.data().nome || 'Profissional'
+            : 'Profissional',
+        };
+      })
+    );
+
+    return res.json({ profissionais });
+  } catch (erro) {
+    console.error('Erro ao listar profissionais:', erro);
+
+    return res.status(500).json({
+      erro: 'Não foi possível carregar os profissionais.',
+    });
+  }
+});
+// Verifica se o profissional tem autorização do responsável
+async function verificarVinculoAprovado(profissionalUid, responsavelUid) {
+  const banco = getFirestore();
+
+  const resultado = await banco
+    .collection('solicitacoesVinculo')
+    .where('profissionalUid', '==', profissionalUid)
+    .where('responsavelUid', '==', responsavelUid)
+    .where('status', '==', 'aprovado')
+    .limit(1)
+    .get();
+
+  return !resultado.empty;
+}
+// Consultar diário de uma criança vinculada
+app.get('/profissional/diario/:responsavelUid', verificarLogin, async (req, res) => {
+  try {
+    const profissionalUid = req.usuario.uid;
+    const { responsavelUid } = req.params;
+    const banco = getFirestore();
+
+    const profissionalDoc = await banco
+      .collection('usuarios')
+      .doc(profissionalUid)
+      .get();
+
+    if (
+      !profissionalDoc.exists ||
+      profissionalDoc.data().tipoConta !== 'profissional'
+    ) {
+      return res.status(403).json({
+        erro: 'Acesso permitido apenas para profissionais.',
+      });
+    }
+
+    const autorizado = await verificarVinculoAprovado(
+      profissionalUid,
+      responsavelUid
+    );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        erro: 'Você não possui autorização para acessar este diário.',
+      });
+    }
+
+    const resultado = await banco
+      .collection('usuarios')
+      .doc(responsavelUid)
+      .collection('atividades')
+      .get();
+
+    const registros = resultado.docs.map((documento) => ({
+      id: documento.id,
+      ...documento.data(),
+    }));
+
+    return res.json({ registros });
+  } catch (erro) {
+    console.error('Erro ao consultar diário profissional:', erro);
+
+    return res.status(500).json({
+      erro: 'Não foi possível carregar o diário.',
+    });
+  }
+});
+// Consultar perfil de uma criança vinculada
+app.get('/profissional/crianca/:responsavelUid', verificarLogin, async (req, res) => {
+  try {
+    const profissionalUid = req.usuario.uid;
+    const { responsavelUid } = req.params;
+    const banco = getFirestore();
+
+    const profissionalDoc = await banco
+      .collection('usuarios')
+      .doc(profissionalUid)
+      .get();
+
+    if (
+      !profissionalDoc.exists ||
+      profissionalDoc.data().tipoConta !== 'profissional'
+    ) {
+      return res.status(403).json({
+        erro: 'Acesso permitido apenas para profissionais.',
+      });
+    }
+
+    const autorizado = await verificarVinculoAprovado(
+      profissionalUid,
+      responsavelUid
+    );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        erro: 'Você não possui autorização para acessar esta criança.',
+      });
+    }
+
+    const criancaDoc = await banco
+      .collection('usuarios')
+      .doc(responsavelUid)
+      .collection('crianca')
+      .doc('dados')
+      .get();
+
+    if (!criancaDoc.exists) {
+      return res.status(404).json({
+        erro: 'Perfil da criança não encontrado.',
+      });
+    }
+
+    return res.json({
+      crianca: criancaDoc.data(),
+    });
+  } catch (erro) {
+    console.error('Erro ao consultar perfil da criança:', erro);
+
+    return res.status(500).json({
+      erro: 'Não foi possível carregar o perfil da criança.',
+    });
+  }
+});
 app.get('/teste-autenticacao', verificarLogin, (req, res) => {
   res.json({
     mensagem: 'Autenticação funcionando!',

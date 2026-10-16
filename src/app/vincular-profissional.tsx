@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
+    Alert,
     Pressable,
     StyleSheet,
     Text,
@@ -21,6 +22,13 @@ type Solicitacao = {
 
 const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
 const [carregandoSolicitacoes, setCarregandoSolicitacoes] = useState(false);
+type ProfissionalVinculado = {
+    solicitacaoId: string;
+    nome: string;
+};
+
+const [profissionais, setProfissionais] = useState<ProfissionalVinculado[]>([]);
+const [carregandoProfissionais, setCarregandoProfissionais] = useState(false);
 const carregarSolicitacoes = useCallback(async () => {
     try {
         setCarregandoSolicitacoes(true);
@@ -54,10 +62,44 @@ const carregarSolicitacoes = useCallback(async () => {
         setCarregandoSolicitacoes(false);
     }
 }, []);
+const carregarProfissionais = useCallback(async () => {
+    try {
+        setCarregandoProfissionais(true);
+
+        const usuario = auth.currentUser;
+        if (!usuario) return;
+
+        const token = await usuario.getIdToken();
+
+        const resposta = await fetch(
+            'https://teajudo-api.onrender.com/vinculos/aprovados',
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(
+                dados.erro || 'Erro ao carregar profissionais.'
+            );
+        }
+
+        setProfissionais(dados.profissionais || []);
+    } catch (erro) {
+        console.log('Erro ao carregar profissionais:', erro);
+    } finally {
+        setCarregandoProfissionais(false);
+    }
+}, []);
 useFocusEffect(
     useCallback(() => {
-        carregarSolicitacoes();
-    }, [carregarSolicitacoes])
+        void carregarSolicitacoes();
+        void carregarProfissionais();
+    }, [carregarSolicitacoes, carregarProfissionais])
 );
 async function responderSolicitacao(
     solicitacaoId: string,
@@ -103,6 +145,43 @@ async function responderSolicitacao(
         await carregarSolicitacoes();
     } catch (erro: any) {
         alert(erro.message || 'Não foi possível responder.');
+    }
+}
+async function revogarAcesso(solicitacaoId: string) {
+    try {
+        const usuario = auth.currentUser;
+
+        if (!usuario) {
+            alert('Faça login para continuar.');
+            return;
+        }
+
+        const token = await usuario.getIdToken();
+
+        const resposta = await fetch(
+            'https://teajudo-api.onrender.com/vinculos/revogar',
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ solicitacaoId }),
+            }
+        );
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(
+                dados.erro || 'Não foi possível revogar o acesso.'
+            );
+        }
+
+        alert('Acesso revogado com sucesso!');
+        await carregarProfissionais();
+    } catch (erro: any) {
+        alert(erro.message || 'Erro ao revogar acesso.');
     }
 }
 async function gerarCodigo() {
@@ -240,6 +319,64 @@ async function gerarCodigo() {
         </Text>
     </Pressable>
 </View>
+            </View>
+        ))
+    )}
+</View>
+<View style={styles.secaoSolicitacoes}>
+    <Text style={styles.tituloSecao}>
+        Profissionais autorizados
+    </Text>
+
+    {carregandoProfissionais ? (
+        <Text style={styles.mensagemSolicitacoes}>
+            Carregando profissionais...
+        </Text>
+    ) : profissionais.length === 0 ? (
+        <Text style={styles.mensagemSolicitacoes}>
+            Nenhum profissional vinculado.
+        </Text>
+    ) : (
+        profissionais.map((profissional) => (
+            <View
+                key={profissional.solicitacaoId}
+                style={styles.cardSolicitacao}
+            >
+                <Ionicons
+                    name="shield-checkmark-outline"
+                    size={30}
+                    color="#42A5D5"
+                />
+
+                <Text style={styles.nomeProfissional}>
+                    {profissional.nome}
+                </Text>
+
+                <Text style={styles.statusSolicitacao}>
+                    Acesso autorizado pelo responsável
+                </Text>
+                <Pressable
+    style={styles.botaoRecusar}
+    onPress={() =>
+        Alert.alert(
+            'Revogar acesso',
+            'Esse profissional perderá o acesso ao perfil e ao diário da criança. Deseja continuar?',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Revogar',
+                    style: 'destructive',
+                    onPress: () =>
+                        revogarAcesso(profissional.solicitacaoId),
+                },
+            ]
+        )
+    }
+>
+    <Text style={styles.textoRecusar}>
+        Revogar acesso
+    </Text>
+</Pressable>
             </View>
         ))
     )}
