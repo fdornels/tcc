@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
     SafeAreaView,
     ScrollView,
@@ -8,8 +9,52 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-
+import { auth } from '../../config/firebase';
 export default function AreaProfissional() {
+    type CriancaVinculada = {
+    responsavelUid: string;
+    nome: string;
+};
+
+const [criancas, setCriancas] = useState<CriancaVinculada[]>([]);
+const [carregando, setCarregando] = useState(false);
+const carregarCriancas = useCallback(async () => {
+    try {
+        setCarregando(true);
+
+        const usuario = auth.currentUser;
+        if (!usuario) return;
+
+        const token = await usuario.getIdToken();
+
+        const resposta = await fetch(
+            'https://teajudo-api.onrender.com/profissional/vinculos',
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(dados.erro || 'Erro ao carregar crianças.');
+        }
+
+        setCriancas(dados.criancas || []);
+    } catch (erro) {
+        console.log('Erro ao carregar crianças:', erro);
+    } finally {
+        setCarregando(false);
+    }
+}, []);
+
+useFocusEffect(
+    useCallback(() => {
+        void carregarCriancas();
+    }, [carregarCriancas])
+);
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.conteudo}>
@@ -19,7 +64,7 @@ export default function AreaProfissional() {
                     </Text>
 
                     <Text style={styles.subtitulo}>
-                        Acompanhando cada conquista com cuidado 💙
+                        Acompanhando cada conquista com cuidado
                     </Text>
                 </View>
 
@@ -31,7 +76,7 @@ export default function AreaProfissional() {
                     />
 
                     <Text style={styles.tituloCard}>
-                        Bem-vindo ao TEAjudo!
+                        Bem-vindo ao (TE)Ajudo!
                     </Text>
 
                     <Text style={styles.descricao}>
@@ -45,23 +90,49 @@ export default function AreaProfissional() {
                     Crianças acompanhadas
                 </Text>
 
-                <View style={styles.cardVazio}>
-                    <Ionicons
-                        name="people-outline"
-                        size={42}
-                        color="#8BCBE8"
-                    />
+                {carregando ? (
+    <Text style={styles.textoVazio}>
+        Carregando crianças...
+    </Text>
+) : criancas.length === 0 ? (
+    <View style={styles.cardVazio}>
+        <Ionicons
+            name="people-outline"
+            size={42}
+            color="#8BCBE8"
+        />
 
-                    <Text style={styles.tituloVazio}>
-                        Nenhuma criança vinculada
-                    </Text>
+        <Text style={styles.tituloVazio}>
+            Nenhuma criança vinculada
+        </Text>
 
-                    <Text style={styles.textoVazio}>
-                        Para começar, solicite à família
-                        um código de vinculação.
-                    </Text>
-                </View>
+        <Text style={styles.textoVazio}>
+            Para começar, solicite à família
+            um código de vinculação.
+        </Text>
+    </View>
+) : (
+    criancas.map((crianca) => (
+        <View
+            key={crianca.responsavelUid}
+            style={styles.cardVazio}
+        >
+            <Ionicons
+                name="person-circle-outline"
+                size={42}
+                color="#42A5D5"
+            />
 
+            <Text style={styles.tituloVazio}>
+                {crianca.nome}
+            </Text>
+
+            <Text style={styles.textoVazio}>
+                Acompanhamento autorizado pela família
+            </Text>
+        </View>
+    ))
+)}
                 <TouchableOpacity
                     style={styles.botaoVincular}
                     onPress={() => router.push('/solicitar-vinculo')}
@@ -89,7 +160,6 @@ export default function AreaProfissional() {
         </SafeAreaView>
     );
 }
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
